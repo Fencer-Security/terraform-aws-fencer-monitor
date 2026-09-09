@@ -1,0 +1,75 @@
+---
+name: Upgrade Weekly Dependencies
+
+on:
+  schedule:
+    - cron: 0 10 * * THU
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize update log
+        run: |
+          : > update.log
+          printf "Automated weekly upgrades: Terraform CLI version in CI and pinned GitHub Action SHAs.\n\n" >> update.log
+
+      - name: Upgrade Terraform version in CI
+        run: |
+          latest="$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest | jq -r .version)"
+          current="$(sed -nE 's/.*terraform_version: "([0-9.]+)".*/\1/p' .github/workflows/ci.yml)"
+          printf "### Terraform CLI\n\n" >> update.log
+          if [ "$latest" != "$current" ]; then
+            sed -i "s/terraform_version: \"$current\"/terraform_version: \"$latest\"/" .github/workflows/ci.yml
+            printf "Bumped \`terraform_version\` in CI: \`%s\` -> \`%s\`.\n\n" "$current" "$latest" >> update.log
+          else
+            printf "_Already on the latest Terraform (%s)._\n\n" "$current" >> update.log
+          fi
+
+      - name: Update pinned GitHub Action SHAs
+        env:
+          PINACT_VERSION: "3.10.1"
+          PINACT_SHA256: "c5234ff3a636cda47719c73ca33a0183a5f441581455eda8a0726e5030942b69"
+        run: |
+          curl -fsSL -o /tmp/pinact.tar.gz \
+              "https://github.com/suzuki-shunsuke/pinact/releases/download/v${PINACT_VERSION}/pinact_linux_amd64.tar.gz"
+          echo "${PINACT_SHA256}  /tmp/pinact.tar.gz" | sha256sum -c - >/dev/null
+          tar -xzf /tmp/pinact.tar.gz -C /tmp pinact
+          printf "### GitHub Action SHAs (pinact)\n\n" >> update.log
+          /tmp/pinact run --update >/tmp/pinact.out 2>&1 || true
+          if grep -q '^::notice' /tmp/pinact.out; then
+            printf "| File | Updated |\n|---|---|\n" >> update.log
+            sed -nE 's|^::notice file=([^,]+),line=[0-9]+,title=[^:]+::[[:space:]]*(.*)$|\1\x01\2|p' \
+                /tmp/pinact.out |
+                awk -F$'\x01' '{printf "| `%s` | `%s` |\n", $1, $2}' >> update.log
+          else
+            printf "_No action SHA updates needed._\n" >> update.log
+          fi
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: generate-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          commit-message: Upgrade dependencies
+          branch: bot/upgrade-dependencies
+          delete-branch: true
+          sign-commits: true
+          title: "Weekly dependency upgrades"
+          body-path: update.log
+          add-paths: |
+            .github/workflows/*.yml
+          team-reviewers: |
+            engineering
