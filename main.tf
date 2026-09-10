@@ -97,6 +97,10 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
       content_encoding = "GZIP"
     }
   }
+
+  # Firehose validates S3 and CloudWatch access lazily, but stream creation must
+  # not race the policy attachment on a customer's first apply.
+  depends_on = [aws_iam_role_policy.firehose]
 }
 
 resource "aws_iam_role" "cloudwatch_to_firehose" {
