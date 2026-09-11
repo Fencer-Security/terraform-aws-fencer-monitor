@@ -4,7 +4,15 @@
 
 Do not open a public issue for a vulnerability.
 
-Use GitHub private vulnerability reporting:
-https://github.com/Fencer-Security/terraform-aws-fencer-monitor/security/advisories/new
+Email your report to <security@fencer.dev>.
 
-We acknowledge reports within 5 business days.
+Please include:
+
+- A well-written report in English.
+- Proof-of-concept code, if available.
+- How you found the bug, the impact, and any potential remediation.
+- Any plans or intentions for public disclosure.
+
+We respond within 10 business days. See our
+[Responsible Disclosure Policy](https://fencer.dev/.well-known/security.txt) for
+the full terms, including our legal safe-harbor commitments.
