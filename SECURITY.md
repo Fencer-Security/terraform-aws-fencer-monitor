@@ -13,6 +13,8 @@ Please include:
 - How you found the bug, the impact, and any potential remediation.
 - Any plans or intentions for public disclosure.
 
-We respond within 10 business days. See our
-[Responsible Disclosure Policy](https://fencer.dev/.well-known/security.txt) for
-the full terms, including our legal safe-harbor commitments.
+We respond within 10 business days.
+
+Fencer will not pursue legal action against researchers who test in good
+faith, do not harm Fencer or its customers, follow applicable laws, and do
+not disclose vulnerability details publicly before a mutually agreed date.
