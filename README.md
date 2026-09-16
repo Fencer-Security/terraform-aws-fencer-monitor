@@ -132,7 +132,7 @@ adjustable). If the log group already feeds other destinations, check
 - An Amazon Data Firehose delivery stream with an HTTP endpoint destination:
   Fencer's URL, your Fencer access token, GZIP content encoding, 1 MiB / 60 s
   buffering.
-- An S3 bucket that stores failed deliveries only. Public access blocked.
+- An S3 bucket that stores failed deliveries only. Public access blocked, versioning on, HTTP denied.
   Objects expire after 30 days.
 - A CloudWatch Logs log group `/aws/kinesisfirehose/<name_prefix>` for
   Firehose error logs (7-day retention).
