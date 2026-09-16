@@ -19,6 +19,28 @@ resource "aws_s3_bucket_public_access_block" "backup" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_versioning" "backup" {
+  bucket = aws_s3_bucket.backup.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_policy" "backup" {
+  bucket = aws_s3_bucket.backup.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyInsecureConnections"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource  = [aws_s3_bucket.backup.arn, "${aws_s3_bucket.backup.arn}/*"]
+      Condition = { Bool = { "aws:SecureTransport" = "false" } }
+    }]
+  })
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "backup" {
   bucket = aws_s3_bucket.backup.id
   rule {
@@ -27,6 +49,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup" {
     filter {}
     expiration {
       days = var.backup_expiration_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = var.backup_expiration_days
     }
   }
 }

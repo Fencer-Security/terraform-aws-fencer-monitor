@@ -4,6 +4,20 @@ mock_provider "aws" {
       account_id = "111111111111"
     }
   }
+
+  # The Firehose resource validates ARN syntax on apply, so the mock apply run
+  # needs well-formed ARNs instead of random strings.
+  mock_resource "aws_s3_bucket" {
+    defaults = {
+      arn = "arn:aws:s3:::fencer-siem-backup-test"
+    }
+  }
+
+  mock_resource "aws_iam_role" {
+    defaults = {
+      arn = "arn:aws:iam::111111111111:role/fencer-siem-firehose"
+    }
+  }
 }
 
 variables {
@@ -80,6 +94,16 @@ run "core_pipeline" {
   }
 
   assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.backup.rule[0].noncurrent_version_expiration[0].noncurrent_days == 30
+    error_message = "Noncurrent backup versions must expire after backup_expiration_days, or versioning keeps them forever."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_versioning.backup.versioning_configuration[0].status == "Enabled"
+    error_message = "Backup bucket versioning must be enabled (Drata DCF-78)."
+  }
+
+  assert {
     condition     = aws_kinesis_firehose_delivery_stream.fencer.http_endpoint_configuration[0].name == "Fencer SIEM Log Ingestion"
     error_message = "HTTP endpoint name must be \"Fencer SIEM Log Ingestion\" (validated design)."
   }
@@ -97,5 +121,23 @@ run "core_pipeline" {
   assert {
     condition     = aws_kinesis_firehose_delivery_stream.fencer.http_endpoint_configuration[0].cloudwatch_logging_options[0].log_stream_name == "DestinationDelivery"
     error_message = "Firehose error log stream must be DestinationDelivery (validated design)."
+  }
+}
+
+# The bucket ARN is unknown at plan time, so the policy needs a mock apply.
+run "backup_bucket_denies_http" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for st in jsondecode(aws_s3_bucket_policy.backup.policy).Statement :
+      st.Effect == "Deny" && st.Principal == "*" && st.Action == "s3:*" && try(st.Condition.Bool["aws:SecureTransport"], null) == "false"
+    ])
+    error_message = "Backup bucket policy must deny all s3:* requests when aws:SecureTransport is false (Drata DCF-55)."
+  }
+
+  assert {
+    condition     = contains(jsondecode(aws_s3_bucket_policy.backup.policy).Statement[0].Resource, aws_s3_bucket.backup.arn) && contains(jsondecode(aws_s3_bucket_policy.backup.policy).Statement[0].Resource, "${aws_s3_bucket.backup.arn}/*")
+    error_message = "Backup bucket HTTP deny must cover the bucket and all objects."
   }
 }

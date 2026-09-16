@@ -53,12 +53,28 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      {
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [aws_s3_bucket.cloudtrail.arn, "${aws_s3_bucket.cloudtrail.arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
       {
         Sid       = "AWSCloudTrailAclCheck"
         Effect    = "Allow"
