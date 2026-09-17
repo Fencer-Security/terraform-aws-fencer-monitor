@@ -17,7 +17,7 @@ One module instance per Fencer data source. CloudTrail example:
 ```hcl
 module "fencer_monitor" {
   source  = "Fencer-Security/fencer-monitor/aws"
-  version = "~> 0.1"
+  version = "~> 1.1"
 
   # Copy both values from the AWS Monitor page in the Fencer app.
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
@@ -172,7 +172,7 @@ empty. Events appear in Fencer (Hunts).
 Pulumi consumes this module directly — no rewrite:
 
 ```bash
-pulumi package add terraform-module Fencer-Security/fencer-monitor/aws 0.1.0 fencermonitor
+pulumi package add terraform-module Fencer-Security/fencer-monitor/aws 1.1.0 fencermonitor
 ```
 
 ```ts
