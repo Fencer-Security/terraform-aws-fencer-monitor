@@ -4,7 +4,7 @@ Terraform module that sets up AWS log streaming to [Fencer](https://www.fencer.d
 It creates an Amazon Data Firehose delivery stream that sends log events to
 Fencer's HTTP endpoint, plus the IAM roles, error logging, and failed-delivery
 backup around it. Optionally it subscribes CloudWatch Logs log groups to the
-stream.
+stream, or publishes VPC flow logs to it.
 
 This is the Infrastructure-as-Code equivalent of the manual console steps on
 the AWS Monitor page in the Fencer app — apply it instead of clicking through
@@ -17,7 +17,7 @@ One module instance per Fencer data source. CloudTrail example:
 ```hcl
 module "fencer_monitor" {
   source  = "Fencer-Security/fencer-monitor/aws"
-  version = "~> 1.1"
+  version = "~> 1.2"
 
   # Copy both values from the AWS Monitor page in the Fencer app.
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
@@ -127,6 +127,40 @@ Note: a log group supports at most 5 subscription filters (AWS quota, not
 adjustable). If the log group already feeds other destinations, check
 `aws logs describe-subscription-filters` before you apply.
 
+### Connect VPC flow logs
+
+Deploy the module in the same AWS account and region as the VPCs. A flow log
+delivers straight to the Firehose stream, so it needs no IAM role and no log
+group. Pass the VPC IDs:
+
+```hcl
+module "fencer_monitor" {
+  source  = "Fencer-Security/fencer-monitor/aws"
+  version = "~> 1.2"
+
+  fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+  fencer_access_key   = var.fencer_access_key
+
+  vpc_flow_log_vpc_ids = ["vpc-0123456789abcdef0"]
+}
+```
+
+The module creates one flow log per VPC. Use one module instance per Fencer
+data source. Do not send CloudTrail and flow logs through the same instance.
+
+Keep `vpc_flow_log_format` at the module default. The default is the Fencer
+format (48 fields). The Fencer transform expects these fields in this order.
+Change the format only when the Fencer data source has a custom
+transformation that expects another format.
+
+The principal that runs Terraform needs these IAM permissions:
+`logs:CreateLogDelivery`, `logs:DeleteLogDelivery`,
+`iam:CreateServiceLinkedRole`, and `firehose:TagDeliveryStream`. For the ECS
+fields it also needs `ecs:ListClusters`, `ecs:ListContainerInstances`,
+`ecs:ListServices`, `ecs:ListTaskDefinitions`, and `ecs:ListTasks`.
+
+See [`examples/vpc-flow-logs`](./examples/vpc-flow-logs).
+
 ### What gets created
 
 - An Amazon Data Firehose delivery stream with an HTTP endpoint destination:
@@ -140,6 +174,8 @@ adjustable). If the log group already feeds other destinations, check
 - When `cloudwatch_log_group_names` is set: an IAM role CloudWatch Logs
   assumes, and one subscription filter per log group (empty filter pattern =
   all events).
+- When `vpc_flow_log_vpc_ids` is set: one VPC flow log per VPC. Each flow log
+  delivers to the Firehose stream.
 
 ### Other data source types
 
@@ -148,7 +184,8 @@ The AWS delivery mechanism decides the setup:
 | Data source | Setup |
 |---|---|
 | CloudTrail | This module. Pass the trail's log group. |
-| RDS PostgreSQL logs, VPC flow logs, Route 53 resolver query logs | Not supported yet. |
+| VPC flow logs | This module. Pass the VPC IDs. |
+| RDS PostgreSQL logs, Route 53 resolver query logs | Not supported yet. |
 | ALB/NLB access logs, S3 access logs | Not supported by this module yet. These services deliver to S3 only. Use the batch setup in the Fencer app. |
 
 ### Examples
@@ -160,6 +197,7 @@ apply, verify, clean up):
 |---|---|
 | [`examples/cloudtrail`](./examples/cloudtrail) | Existing trail that already delivers to CloudWatch Logs. |
 | [`examples/cloudtrail-new-trail`](./examples/cloudtrail-new-trail) | No trail yet — creates the trail, its S3 bucket, the log group, and the stream. |
+| [`examples/vpc-flow-logs`](./examples/vpc-flow-logs) | VPC flow logs that deliver straight to the stream. |
 
 ### Verify
 
@@ -172,7 +210,7 @@ empty. Events appear in Fencer (Hunts).
 Pulumi consumes this module directly — no rewrite:
 
 ```bash
-pulumi package add terraform-module Fencer-Security/fencer-monitor/aws 1.1.0 fencermonitor
+pulumi package add terraform-module Fencer-Security/fencer-monitor/aws 1.2.0 fencermonitor
 ```
 
 ```ts
@@ -193,6 +231,10 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `fencer_access_key` | `string` | — | Fencer access token (from the Fencer app). Sensitive. |
 | `cloudwatch_log_group_names` | `list(string)` | `[]` | Log groups to subscribe to the stream. |
 | `name_prefix` | `string` | `"fencer-siem"` | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. |
+| `vpc_flow_log_vpc_ids` | `list(string)` | `[]` | VPCs to publish flow logs from. One flow log per VPC. Non-empty, unique entries. |
+| `vpc_flow_log_format` | `string` | Fencer format (48 fields) | Custom flow log format. Change it only for a custom Fencer transformation. |
+| `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |
+| `vpc_flow_log_max_aggregation_interval` | `number` | `60` | Seconds AWS aggregates records before it publishes them: `60` or `600`. |
 | `subscription_filter_pattern` | `string` | `""` | Filter pattern. Empty sends all events. |
 | `backup_expiration_days` | `number` | `30` | Expiry for failed-delivery objects. |
 | `error_log_retention_days` | `number` | `7` | Retention of the error log group. |
@@ -208,6 +250,7 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `backup_bucket_arn` | Failed-delivery bucket ARN. |
 | `firehose_role_arn` | Firehose service role ARN. |
 | `cloudwatch_to_firehose_role_arn` | Subscription role ARN, `null` when no log groups. |
+| `flow_log_ids` | Map of VPC ID to flow log ID. Empty when no VPC IDs. |
 
 ### License
 
