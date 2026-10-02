@@ -167,3 +167,16 @@ resource "aws_cloudwatch_log_subscription_filter" "fencer" {
 
   depends_on = [aws_iam_role_policy.cloudwatch_to_firehose]
 }
+
+resource "aws_flow_log" "fencer" {
+  for_each                 = toset(var.vpc_flow_log_vpc_ids)
+  vpc_id                   = each.value
+  traffic_type             = var.vpc_flow_log_traffic_type
+  log_destination_type     = "kinesis-data-firehose"
+  log_destination          = aws_kinesis_firehose_delivery_stream.fencer.arn
+  log_format               = var.vpc_flow_log_format
+  max_aggregation_interval = var.vpc_flow_log_max_aggregation_interval
+  tags                     = var.tags
+
+  depends_on = [aws_kinesis_firehose_delivery_stream.fencer]
+}
