@@ -98,7 +98,7 @@ run "flow_logs_use_module_tags" {
   }
 }
 
-run "default_format_is_the_fencer_format" {
+run "default_format_is_the_version_10_format" {
   command = plan
 
   variables {
@@ -106,13 +106,27 @@ run "default_format_is_the_fencer_format" {
   }
 
   assert {
-    condition     = var.vpc_flow_log_format == "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${start} $${end} $${action} $${log-status} $${vpc-id} $${subnet-id} $${instance-id} $${tcp-flags} $${type} $${pkt-srcaddr} $${pkt-dstaddr} $${region} $${az-id} $${sublocation-type} $${sublocation-id} $${pkt-src-aws-service} $${pkt-dst-aws-service} $${flow-direction} $${traffic-path} $${ecs-cluster-arn} $${ecs-cluster-name} $${ecs-container-instance-arn} $${ecs-container-instance-id} $${ecs-container-id} $${ecs-second-container-id} $${ecs-service-name} $${ecs-task-definition-arn} $${ecs-task-arn} $${ecs-task-id} $${reject-reason} $${resource-id} $${encryption-status} $${interface-type} $${next-hop-interface-id} $${next-hop-subnet-id} $${next-hop-az-id} $${next-hop-vpc-id} $${next-hop-interface-type}"
-    error_message = "The default log format must be the Fencer format: Fencer's transform expects these 48 fields in this order."
+    condition     = var.vpc_flow_log_format == "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${start} $${end} $${action} $${log-status} $${vpc-id} $${subnet-id} $${instance-id} $${tcp-flags} $${type} $${pkt-srcaddr} $${pkt-dstaddr} $${region} $${az-id} $${sublocation-type} $${sublocation-id} $${pkt-src-aws-service} $${pkt-dst-aws-service} $${flow-direction} $${traffic-path} $${ecs-cluster-arn} $${ecs-cluster-name} $${ecs-container-instance-arn} $${ecs-container-instance-id} $${ecs-container-id} $${ecs-second-container-id} $${ecs-service-name} $${ecs-task-definition-arn} $${ecs-task-arn} $${ecs-task-id} $${reject-reason} $${resource-id} $${encryption-status}"
+    error_message = "The default log format must be the version 10 format: the 42 fields of AWS flow log version 10 in this order."
   }
 
   assert {
     condition     = aws_flow_log.fencer["vpc-0aaa1111"].log_format == var.vpc_flow_log_format
     error_message = "The flow log must use vpc_flow_log_format."
+  }
+}
+
+run "custom_format_is_passed_through" {
+  command = plan
+
+  variables {
+    vpc_flow_log_vpc_ids = ["vpc-0aaa1111"]
+    vpc_flow_log_format  = "$${version} $${account-id} $${interface-id}"
+  }
+
+  assert {
+    condition     = aws_flow_log.fencer["vpc-0aaa1111"].log_format == "$${version} $${account-id} $${interface-id}"
+    error_message = "A custom vpc_flow_log_format must reach the flow log unchanged."
   }
 }
 

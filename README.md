@@ -148,10 +148,14 @@ module "fencer_monitor" {
 The module creates one flow log per VPC. Use one module instance per Fencer
 data source. Do not send CloudTrail and flow logs through the same instance.
 
-Keep `vpc_flow_log_format` at the module default. The default is the Fencer
-format (48 fields). The Fencer transform expects these fields in this order.
-Change the format only when the Fencer data source has a custom
-transformation that expects another format.
+Keep `vpc_flow_log_format` at the module default. The default is the AWS
+version 10 field set (42 fields). Fencer accepts the full field set of any
+flow log version (2 to 11) in AWS table order. Change the format only when the
+Fencer data source has a custom transformation that expects another format.
+
+To include the version 11 tag fields, set `vpc_flow_log_format` to the version
+11 field set (54 fields). Then configure `TagFieldSpecifications` yourself. The
+module does not manage it.
 
 The principal that runs Terraform needs these IAM permissions:
 `logs:CreateLogDelivery`, `logs:DeleteLogDelivery`,
@@ -232,7 +236,7 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `cloudwatch_log_group_names` | `list(string)` | `[]` | Log groups to subscribe to the stream. |
 | `name_prefix` | `string` | `"fencer-siem"` | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. |
 | `vpc_flow_log_vpc_ids` | `list(string)` | `[]` | VPCs to publish flow logs from. One flow log per VPC. Non-empty, unique entries. |
-| `vpc_flow_log_format` | `string` | Fencer format (48 fields) | Custom flow log format. Change it only for a custom Fencer transformation. |
+| `vpc_flow_log_format` | `string` | AWS version 10 field set (42 fields) | Flow log format. Fencer accepts the full field set of any version (2 to 11). Any other field set needs a custom Fencer transformation. |
 | `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |
 | `vpc_flow_log_max_aggregation_interval` | `number` | `60` | Seconds AWS aggregates records before it publishes them: `60` or `600`. |
 | `subscription_filter_pattern` | `string` | `""` | Filter pattern. Empty sends all events. |

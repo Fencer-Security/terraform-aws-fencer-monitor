@@ -15,7 +15,7 @@ Check that the principal that runs Terraform has these IAM permissions:
 - `iam:CreateServiceLinkedRole`
 - `firehose:TagDeliveryStream`
 
-The Fencer format includes ECS fields. For those fields, the principal also
+The default version 10 format (42 fields) includes ECS fields. For those fields, the principal also
 needs these permissions:
 
 - `ecs:ListClusters`
