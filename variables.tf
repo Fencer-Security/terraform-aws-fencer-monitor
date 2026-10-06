@@ -74,3 +74,47 @@ variable "tags" {
   description = "Tags to apply to all taggable resources."
   default     = {}
 }
+
+variable "vpc_flow_log_vpc_ids" {
+  type        = list(string)
+  description = "IDs of the VPCs to publish flow logs from. The module creates one flow log per VPC and delivers it straight to the Firehose stream. The VPCs must be in the same account and region as the stream. Leave empty to create no flow logs."
+  default     = []
+
+  validation {
+    condition     = alltrue([for id in var.vpc_flow_log_vpc_ids : length(id) > 0]) && length(var.vpc_flow_log_vpc_ids) == length(distinct(var.vpc_flow_log_vpc_ids))
+    error_message = "vpc_flow_log_vpc_ids entries must be non-empty and unique."
+  }
+}
+
+variable "vpc_flow_log_format" {
+  type        = string
+  description = "Log format of the flow logs. The default is the AWS version 10 field set (42 fields). Fencer accepts the full field set of any flow log version (2 to 11) in AWS table order. Any other field set needs a custom Fencer transformation."
+  default     = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${start} $${end} $${action} $${log-status} $${vpc-id} $${subnet-id} $${instance-id} $${tcp-flags} $${type} $${pkt-srcaddr} $${pkt-dstaddr} $${region} $${az-id} $${sublocation-type} $${sublocation-id} $${pkt-src-aws-service} $${pkt-dst-aws-service} $${flow-direction} $${traffic-path} $${ecs-cluster-arn} $${ecs-cluster-name} $${ecs-container-instance-arn} $${ecs-container-instance-id} $${ecs-container-id} $${ecs-second-container-id} $${ecs-service-name} $${ecs-task-definition-arn} $${ecs-task-arn} $${ecs-task-id} $${reject-reason} $${resource-id} $${encryption-status}"
+
+  validation {
+    condition     = length(var.vpc_flow_log_format) > 0
+    error_message = "vpc_flow_log_format must not be empty."
+  }
+}
+
+variable "vpc_flow_log_traffic_type" {
+  type        = string
+  description = "Traffic to log: ACCEPT, REJECT, or ALL."
+  default     = "ALL"
+
+  validation {
+    condition     = contains(["ACCEPT", "REJECT", "ALL"], var.vpc_flow_log_traffic_type)
+    error_message = "vpc_flow_log_traffic_type must be ACCEPT, REJECT, or ALL."
+  }
+}
+
+variable "vpc_flow_log_max_aggregation_interval" {
+  type        = number
+  description = "Maximum interval in seconds that AWS aggregates flow log records before it publishes them: 60 or 600."
+  default     = 60
+
+  validation {
+    condition     = contains([60, 600], var.vpc_flow_log_max_aggregation_interval)
+    error_message = "vpc_flow_log_max_aggregation_interval must be 60 or 600."
+  }
+}
