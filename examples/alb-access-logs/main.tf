@@ -1,9 +1,9 @@
-# Deliver Application Load Balancer access logs or connection logs straight to the Fencer
-# Firehose stream as JSON. The module creates one CloudWatch log delivery per load balancer.
-# It does not change the load balancers.
+# Deliver Application Load Balancer access logs straight to the Fencer Firehose stream as JSON.
+# The module creates one CloudWatch log delivery per load balancer. It does not change the load
+# balancers.
 #
-# One module instance delivers one log type to one Fencer data source. For the other log type,
-# create a second Fencer data source and a second instance with another name_prefix.
+# One module instance delivers one log type to one Fencer data source. For connection logs,
+# create a second Fencer data source and use examples/alb-connection-logs with its own token.
 #
 # Run this in the same AWS account and region as the load balancers.
 
@@ -27,15 +27,9 @@ variable "fencer_endpoint_url" {
 }
 
 variable "fencer_access_key" {
-  description = "Fencer access token. Generate it on the AWS Monitor page in the Fencer app. The Fencer data source must have the matching type: AWS ALB Access Logs or AWS ALB Connection Logs."
+  description = "Fencer access token. Generate it on the AWS Monitor page in the Fencer app. The Fencer data source must have the type AWS ALB Access Logs."
   type        = string
   sensitive   = true
-}
-
-variable "alb_log_type" {
-  description = "ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS."
-  type        = string
-  default     = "ALB_ACCESS_LOGS"
 }
 
 variable "load_balancer_arns" {
@@ -57,10 +51,10 @@ module "fencer_monitor" {
   fencer_endpoint_url = var.fencer_endpoint_url
   fencer_access_key   = var.fencer_access_key
 
-  # One prefix per log type, so two instances in one account do not collide.
-  name_prefix = lower(replace(var.alb_log_type, "_", "-"))
+  # One prefix per log type, so the instances for both log types do not collide in one account.
+  name_prefix = "fencer-alb-access-logs"
 
-  alb_log_type           = var.alb_log_type
+  alb_log_type           = "ALB_ACCESS_LOGS"
   alb_load_balancer_arns = var.load_balancer_arns
 }
 

@@ -1,21 +1,20 @@
-# ALB access logs or connection logs → Fencer
+# ALB access logs → Fencer
 
-Delivers Application Load Balancer access logs or connection logs straight to a
-Fencer Firehose stream as JSON, through a CloudWatch log delivery. The module
-creates one log delivery per load balancer. It does not change the load
-balancers.
+Delivers Application Load Balancer access logs straight to a Fencer Firehose
+stream as JSON, through a CloudWatch log delivery. The module creates one log
+delivery per load balancer. It does not change the load balancers.
 
-One module instance delivers one log type to one Fencer data source. For the
-other log type, create a second Fencer data source (with its own token) and a
-second instance. This example derives `name_prefix` from the log type, so two
-instances in one account do not collide.
+One module instance delivers one log type to one Fencer data source. For
+connection logs, create a second Fencer data source (with its own token) and
+use [`examples/alb-connection-logs`](../alb-connection-logs). The two examples use
+different `name_prefix` values, so they do not collide in one account.
 
 Run this in the same AWS account and region as the load balancers.
 
 ## Before you apply
 
-Create the Fencer data source with the matching type (AWS ALB Access Logs or
-AWS ALB Connection Logs) and generate its access token.
+Create the Fencer data source with the type AWS ALB Access Logs and generate
+its access token.
 
 Check that the principal that runs Terraform has these IAM permissions:
 
@@ -37,18 +36,16 @@ aws elbv2 describe-load-balancers --query 'LoadBalancers[?Type==`application`].[
 ```sh
 export TF_VAR_fencer_endpoint_url="https://..."       # from the Fencer app
 export TF_VAR_fencer_access_key="..."                 # from the Fencer app
-export TF_VAR_alb_log_type="ALB_ACCESS_LOGS"          # or ALB_CONNECTION_LOGS
 export TF_VAR_load_balancer_arns='["arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-lb/50dc6c495c0c9188"]'
 
 terraform init
-terraform plan    # only new alb-access-logs* resources plus one delivery per load balancer
+terraform plan    # only new fencer-alb-access-logs* resources plus one delivery per load balancer
 terraform apply
 ```
 
 ## Verify
 
-Log records need requests to the load balancer. Firehose buffers for up to
-60 s.
+Log records need requests to the load balancer. Firehose buffers for up to 60 s.
 
 ```sh
 aws logs describe-deliveries \

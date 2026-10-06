@@ -236,7 +236,8 @@ permissions (`logs:PutDeliverySource`, `logs:PutDeliveryDestination`,
 and `iam:CreateServiceLinkedRole` for the first log delivery to Firehose in the
 account. The module needs provider `hashicorp/aws` 5.83 or newer.
 
-See [`examples/alb-logs`](./examples/alb-logs).
+See [`examples/alb-access-logs`](./examples/alb-access-logs) and
+[`examples/alb-connection-logs`](./examples/alb-connection-logs).
 
 ### What gets created
 
@@ -279,7 +280,8 @@ apply, verify, clean up):
 | [`examples/cloudtrail`](./examples/cloudtrail) | Existing trail that already delivers to CloudWatch Logs. |
 | [`examples/cloudtrail-new-trail`](./examples/cloudtrail-new-trail) | No trail yet — creates the trail, its S3 bucket, the log group, and the stream. |
 | [`examples/vpc-flow-logs`](./examples/vpc-flow-logs) | VPC flow logs that deliver straight to the stream. |
-| [`examples/alb-logs`](./examples/alb-logs) | ALB access logs or connection logs through a CloudWatch log delivery to the stream. |
+| [`examples/alb-access-logs`](./examples/alb-access-logs) | ALB access logs through a CloudWatch log delivery to the stream. |
+| [`examples/alb-connection-logs`](./examples/alb-connection-logs) | ALB connection logs through a CloudWatch log delivery to the stream. |
 
 ### Verify
 
