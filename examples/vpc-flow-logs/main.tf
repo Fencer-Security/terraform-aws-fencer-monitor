@@ -33,6 +33,17 @@ variable "vpc_ids" {
   type        = list(string)
 }
 
+variable "flow_log_version" {
+  description = "Flow log version to publish. Fencer accepts the full field set of versions 2, 3, 4, 5, 7, 8, 9, 10 and 11. See formats.tf."
+  type        = string
+  default     = "10"
+
+  validation {
+    condition     = contains(["2", "3", "4", "5", "7", "8", "9", "10", "11"], var.flow_log_version)
+    error_message = "flow_log_version must be one of 2, 3, 4, 5, 7, 8, 9, 10 or 11."
+  }
+}
+
 # Permissions. The principal that runs terraform apply needs the usual rights on Firehose, IAM, S3
 # and CloudWatch Logs, plus these for the flow logs:
 #   logs:CreateLogDelivery, logs:DeleteLogDelivery   flow log delivery to Firehose
@@ -50,8 +61,8 @@ module "fencer_monitor" {
   vpc_flow_log_vpc_ids = var.vpc_ids
 
   # Log format. Fencer reads the fields by position and accepts the full field set of one flow log
-  # version, in the AWS order. The default is the version 10 set (42 fields). A subset, another
-  # order or an unlisted version lands in Fencer as an error row. There is no version 6.
+  # version, in the AWS order. The module default is the version 10 set (42 fields). formats.tf
+  # holds every accepted version; flow_log_version selects one.
   #
   #   Version | Fields | Fields the version adds, in order
   #   2       | 14     | version account-id interface-id srcaddr dstaddr srcport dstport protocol
@@ -68,13 +79,7 @@ module "fencer_monitor" {
   #   11      | 54     | instance-tag instance-tag-2 interface-tag interface-tag-2 asg-tag asg-tag-2
   #           |        | interface-type next-hop-interface-id next-hop-subnet-id next-hop-az-id
   #           |        | next-hop-vpc-id next-hop-interface-type
-  #
-  # Version 11 needs TagFieldSpecifications on the flow log before AWS fills the tag fields.
-  # To use another version, set vpc_flow_log_format to every field of that version as a
-  # "$${field-name}" token (the double $ is the Terraform escape). The AWS default format,
-  # version 2:
-  #
-  # vpc_flow_log_format = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${start} $${end} $${action} $${log-status}"
+  vpc_flow_log_format = local.vpc_flow_log_formats[var.flow_log_version]
 }
 
 output "firehose_delivery_stream_arn" {

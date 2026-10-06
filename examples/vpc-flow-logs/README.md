@@ -36,6 +36,7 @@ aws ec2 describe-vpcs --query 'Vpcs[].VpcId'
 export TF_VAR_fencer_endpoint_url="https://..."       # from the Fencer app
 export TF_VAR_fencer_access_key="..."                 # from the Fencer app
 export TF_VAR_vpc_ids='["vpc-0123456789abcdef0"]'
+export TF_VAR_flow_log_version=10                    # optional: 2, 3, 4, 5, 7, 8, 9, 10 or 11, see formats.tf
 
 terraform init
 terraform plan    # only new fencer-siem* resources plus one flow log per VPC
