@@ -134,3 +134,25 @@ variable "vpc_flow_log_tag_field_specifications" {
     error_message = "resource_type must be instance, network-interface or auto-scaling-group."
   }
 }
+
+variable "alb_log_type" {
+  type        = string
+  description = "ALB log type to deliver from the load balancers in alb_load_balancer_arns: ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS. One module instance, one Fencer data source and one stream deliver one log type. Required when alb_load_balancer_arns is not empty."
+  default     = null
+
+  validation {
+    condition     = var.alb_log_type == null || contains(["ALB_ACCESS_LOGS", "ALB_CONNECTION_LOGS"], coalesce(var.alb_log_type, "ALB_ACCESS_LOGS"))
+    error_message = "alb_log_type must be ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS."
+  }
+}
+
+variable "alb_load_balancer_arns" {
+  type        = list(string)
+  description = "ARNs of the Application Load Balancers whose logs of type alb_log_type the module delivers to the Firehose stream as JSON. The module creates one CloudWatch log delivery per load balancer. The load balancers must be in the same account and region as the stream. Leave empty to create no log delivery."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.alb_load_balancer_arns : can(regex("^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:loadbalancer/app/[^/]+/[0-9a-f]+$", arn))]) && length(var.alb_load_balancer_arns) == length(distinct(var.alb_load_balancer_arns))
+    error_message = "alb_load_balancer_arns entries must be unique Application Load Balancer ARNs (arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/app/<name>/<id>)."
+  }
+}

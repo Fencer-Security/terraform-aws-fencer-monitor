@@ -17,7 +17,7 @@ One module instance per Fencer data source. CloudTrail example:
 ```hcl
 module "fencer_monitor" {
   source  = "Fencer-Security/fencer-monitor/aws"
-  version = "~> 1.2"
+  version = "~> 1.3"
 
   # Copy both values from the AWS Monitor page in the Fencer app.
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
@@ -138,7 +138,7 @@ group. Pass the VPC IDs:
 ```hcl
 module "fencer_monitor" {
   source  = "Fencer-Security/fencer-monitor/aws"
-  version = "~> 1.2"
+  version = "~> 1.3"
 
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
   fencer_access_key   = var.fencer_access_key
@@ -196,6 +196,48 @@ fields it also needs `ecs:ListClusters`, `ecs:ListContainerInstances`,
 
 See [`examples/vpc-flow-logs`](./examples/vpc-flow-logs).
 
+### Connect ALB access logs or connection logs
+
+Deploy the module in the same AWS account and region as the load balancers.
+An Application Load Balancer delivers its access logs and connection logs
+through a CloudWatch log delivery (vended logs), straight to the Firehose
+stream, as JSON. Pass the log type and the load balancer ARNs:
+
+```hcl
+module "fencer_alb_access_logs" {
+  source  = "Fencer-Security/fencer-monitor/aws"
+  version = "~> 1.3"
+
+  fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+  fencer_access_key   = var.fencer_alb_access_logs_access_key
+  name_prefix         = "fencer-alb-access-logs"
+
+  alb_log_type           = "ALB_ACCESS_LOGS"
+  alb_load_balancer_arns = ["arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-lb/50dc6c495c0c9188"]
+}
+```
+
+The module creates one delivery destination that points at the stream, and
+one delivery source plus one delivery per load balancer. One module instance
+delivers one log type to one Fencer data source. For connection logs, create a
+second Fencer data source of type AWS ALB Connection Logs and a second
+instance with `alb_log_type = "ALB_CONNECTION_LOGS"` and another
+`name_prefix`. Do not send both log types through one instance: Fencer does
+not reject a record of the other type, it lands with few mapped fields.
+
+The delivery writes only to a stream with the tag `LogDeliveryEnabled = true`.
+The module adds that tag to the stream when `alb_load_balancer_arns` is set,
+so Terraform never removes it.
+
+The principal that runs Terraform needs the CloudWatch Logs delivery
+permissions (`logs:PutDeliverySource`, `logs:PutDeliveryDestination`,
+`logs:CreateDelivery`, their `Get`, `Describe`, `Delete` and
+`logs:UpdateDeliveryConfiguration` counterparts), `firehose:TagDeliveryStream`,
+and `iam:CreateServiceLinkedRole` for the first log delivery to Firehose in the
+account. The module needs provider `hashicorp/aws` 5.83 or newer.
+
+See [`examples/alb-logs`](./examples/alb-logs).
+
 ### What gets created
 
 - An Amazon Data Firehose delivery stream with an HTTP endpoint destination:
@@ -211,6 +253,9 @@ See [`examples/vpc-flow-logs`](./examples/vpc-flow-logs).
   all events).
 - When `vpc_flow_log_vpc_ids` is set: one VPC flow log per VPC. Each flow log
   delivers to the Firehose stream.
+- When `alb_load_balancer_arns` is set: one CloudWatch log delivery
+  destination (the stream, JSON output), one delivery source and one delivery
+  per load balancer, and the `LogDeliveryEnabled = true` tag on the stream.
 
 ### Other data source types
 
@@ -221,7 +266,8 @@ The AWS delivery mechanism decides the setup:
 | CloudTrail | This module. Pass the trail's log group. |
 | VPC flow logs | This module. Pass the VPC IDs. |
 | RDS PostgreSQL logs, Route 53 resolver query logs | Not supported yet. |
-| ALB/NLB access logs, S3 access logs | Not supported by this module yet. These services deliver to S3 only. Use the batch setup in the Fencer app. |
+| ALB access logs, ALB connection logs | This module. Pass the log type and the load balancer ARNs. One instance per log type. |
+| NLB access logs, S3 access logs | Not supported by this module yet. Use the batch setup in the Fencer app. |
 
 ### Examples
 
@@ -233,6 +279,7 @@ apply, verify, clean up):
 | [`examples/cloudtrail`](./examples/cloudtrail) | Existing trail that already delivers to CloudWatch Logs. |
 | [`examples/cloudtrail-new-trail`](./examples/cloudtrail-new-trail) | No trail yet — creates the trail, its S3 bucket, the log group, and the stream. |
 | [`examples/vpc-flow-logs`](./examples/vpc-flow-logs) | VPC flow logs that deliver straight to the stream. |
+| [`examples/alb-logs`](./examples/alb-logs) | ALB access logs or connection logs through a CloudWatch log delivery to the stream. |
 
 ### Verify
 
@@ -245,7 +292,7 @@ empty. Events appear in Fencer (Hunts).
 Pulumi consumes this module directly — no rewrite:
 
 ```bash
-pulumi package add terraform-module Fencer-Security/fencer-monitor/aws 1.2.0 fencermonitor
+pulumi package add terraform-module Fencer-Security/fencer-monitor/aws 1.3.0 fencermonitor
 ```
 
 ```ts
@@ -270,6 +317,8 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `vpc_flow_log_format` | `string` | AWS version 10 field set (42 fields) | Flow log format. Fencer accepts the full field set of any version (2 to 11). Any other field set needs a custom Fencer transformation. |
 | `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |
 | `vpc_flow_log_max_aggregation_interval` | `number` | `60` | Seconds AWS aggregates records before it publishes them: `60` or `600`. |
+| `alb_log_type` | `string` | `null` | `ALB_ACCESS_LOGS` or `ALB_CONNECTION_LOGS`. Required when `alb_load_balancer_arns` is set. One instance delivers one log type. |
+| `alb_load_balancer_arns` | `list(string)` | `[]` | Application Load Balancer ARNs to deliver logs from. One log delivery per load balancer. Unique entries. |
 | `subscription_filter_pattern` | `string` | `""` | Filter pattern. Empty sends all events. |
 | `backup_expiration_days` | `number` | `30` | Expiry for failed-delivery objects. |
 | `error_log_retention_days` | `number` | `7` | Retention of the error log group. |
@@ -286,6 +335,8 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `firehose_role_arn` | Firehose service role ARN. |
 | `cloudwatch_to_firehose_role_arn` | Subscription role ARN, `null` when no log groups. |
 | `flow_log_ids` | Map of VPC ID to flow log ID. Empty when no VPC IDs. |
+| `alb_log_delivery_destination_arn` | Log delivery destination ARN, `null` when no load balancer ARNs. |
+| `alb_log_delivery_ids` | Map of load balancer ARN to log delivery ID. Empty when no load balancer ARNs. |
 
 ### License
 

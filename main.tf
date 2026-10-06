@@ -90,14 +90,22 @@ resource "aws_iam_role_policy" "firehose" {
   })
 }
 
+locals {
+  alb_logs_enabled = length(var.alb_load_balancer_arns) > 0 && var.alb_log_type != null
+  # Load balancer name: the segment between "loadbalancer/app/" and the next "/" in the ARN.
+  alb_names = { for arn in var.alb_load_balancer_arns : arn => split("/", arn)[2] }
+  # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
+  # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log or a log delivery, and
+  # Terraform removes a tag that is not in the configuration on the next apply. Keep it while the
+  # module creates flow logs or ALB log deliveries, so a stream that only CloudTrail uses does not
+  # get it.
+  stream_tags = merge(var.tags, length(var.vpc_flow_log_vpc_ids) > 0 || local.alb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
+}
+
 resource "aws_kinesis_firehose_delivery_stream" "fencer" {
   name        = var.name_prefix
   destination = "http_endpoint"
-  # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
-  # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log, and Terraform removes a
-  # tag that is not in the configuration on the next apply. Keep it while the module creates flow
-  # logs, so a stream that only CloudTrail uses does not get it.
-  tags = merge(var.tags, length(var.vpc_flow_log_vpc_ids) > 0 ? { LogDeliveryEnabled = "true" } : {})
+  tags        = local.stream_tags
 
   http_endpoint_configuration {
     url                = var.fencer_endpoint_url
@@ -130,6 +138,15 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
   # Firehose validates S3 and CloudWatch access lazily, but stream creation must
   # not race the policy attachment on a customer's first apply.
   depends_on = [aws_iam_role_policy.firehose]
+
+  lifecycle {
+    # Checked here, on a resource that always exists, so a missing log type fails the plan with
+    # this message instead of a provider error on the delivery source.
+    precondition {
+      condition     = length(var.alb_load_balancer_arns) == 0 || var.alb_log_type != null
+      error_message = "Set alb_log_type to ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS when alb_load_balancer_arns is not empty. One module instance delivers one log type."
+    }
+  }
 }
 
 resource "aws_iam_role" "cloudwatch_to_firehose" {
@@ -203,4 +220,37 @@ resource "aws_flow_log" "fencer" {
       error_message = "vpc_flow_log_format has tag fields. Set vpc_flow_log_tag_field_specifications, or AWS cannot fill them."
     }
   }
+}
+
+resource "aws_cloudwatch_log_delivery_destination" "alb" {
+  count         = local.alb_logs_enabled ? 1 : 0
+  name          = var.name_prefix
+  output_format = "json"
+  tags          = var.tags
+
+  delivery_destination_configuration {
+    destination_resource_arn = aws_kinesis_firehose_delivery_stream.fencer.arn
+  }
+}
+
+resource "aws_cloudwatch_log_delivery_source" "alb" {
+  for_each     = local.alb_logs_enabled ? local.alb_names : {}
+  name         = "${var.name_prefix}-${each.value}"
+  log_type     = var.alb_log_type
+  resource_arn = each.key
+  tags         = var.tags
+
+  lifecycle {
+    precondition {
+      condition     = length("${var.name_prefix}-${each.value}") <= 60
+      error_message = "The delivery source name <name_prefix>-<load balancer name> must be at most 60 characters. Use a shorter name_prefix."
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_delivery" "alb" {
+  for_each                 = aws_cloudwatch_log_delivery_source.alb
+  delivery_source_name     = each.value.name
+  delivery_destination_arn = aws_cloudwatch_log_delivery_destination.alb[0].arn
+  tags                     = var.tags
 }

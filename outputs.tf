@@ -32,3 +32,13 @@ output "flow_log_ids" {
   description = "Map of VPC ID to flow log ID. Empty when vpc_flow_log_vpc_ids is empty."
   value       = { for k, v in aws_flow_log.fencer : k => v.id }
 }
+
+output "alb_log_delivery_destination_arn" {
+  description = "ARN of the CloudWatch log delivery destination that points at the stream. Null when alb_load_balancer_arns is empty."
+  value       = one(aws_cloudwatch_log_delivery_destination.alb[*].arn)
+}
+
+output "alb_log_delivery_ids" {
+  description = "Map of load balancer ARN to CloudWatch log delivery ID. Empty when alb_load_balancer_arns is empty."
+  value       = { for k, v in aws_cloudwatch_log_delivery.alb : k => v.id }
+}
