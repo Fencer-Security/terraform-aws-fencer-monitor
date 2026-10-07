@@ -35,6 +35,7 @@ mock_provider "aws" {
 variables {
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/test"
   fencer_access_key   = "test-token"
+  name_prefix         = "fencer-siem"
   alb_a               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/web-prod/50dc6c495c0c9188"
   alb_b               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/api-prod/0123456789abcdef"
 }
