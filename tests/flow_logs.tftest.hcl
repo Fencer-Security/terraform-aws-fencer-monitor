@@ -29,6 +29,7 @@ mock_provider "aws" {
 variables {
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/test"
   fencer_access_key   = "test-token"
+  name_prefix         = "fencer-siem"
 }
 
 run "no_flow_logs_by_default" {

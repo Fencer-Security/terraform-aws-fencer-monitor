@@ -24,6 +24,7 @@ module "fencer_monitor" {
   fencer_access_key   = var.fencer_access_key
 
   # The CloudWatch Logs log group your CloudTrail trail delivers into.
+  name_prefix                = "fencer-cloudtrail"
   cloudwatch_log_group_names = ["aws-cloudtrail-logs-example"]
 }
 ```
@@ -114,6 +115,7 @@ resource "aws_cloudtrail" "my_trail" {
 
 module "fencer_monitor" {
   # ...
+  name_prefix                = "fencer-cloudtrail"
   cloudwatch_log_group_names = [aws_cloudwatch_log_group.cloudtrail.name]
 }
 ```
@@ -150,7 +152,7 @@ module "fencer_monitor" {
 The module creates one flow log per VPC. Use one module instance per Fencer
 data source. Do not send CloudTrail and flow logs through the same instance;
 the module refuses VPC IDs and log group names together. Each module instance
-in an AWS account must have a different `name_prefix`: the IAM role, the
+in an AWS account must have a different `name_prefix` (the input is required): the IAM role, the
 stream and the log group take their names from it.
 
 The default `vpc_flow_log_format` is the AWS version 10 field set (42 fields).
@@ -255,7 +257,7 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `fencer_endpoint_url` | `string` | — | Fencer Firehose HTTP endpoint URL (from the Fencer app). |
 | `fencer_access_key` | `string` | — | Fencer access token (from the Fencer app). Sensitive. |
 | `cloudwatch_log_group_names` | `list(string)` | `[]` | Log groups to subscribe to the stream. |
-| `name_prefix` | `string` | `"fencer-siem"` | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. |
+| `name_prefix` | `string` | required | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. Each module instance in an AWS account needs a different one. |
 | `vpc_flow_log_vpc_ids` | `list(string)` | `[]` | VPCs to publish flow logs from. One flow log per VPC. Non-empty, unique entries. |
 | `vpc_flow_log_format` | `string` | AWS version 10 field set (42 fields) | Flow log format. Fencer accepts the full field set of any version (2 to 11). Any other field set needs a custom Fencer transformation. |
 | `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |

@@ -32,8 +32,7 @@ variable "cloudwatch_log_group_names" {
 
 variable "name_prefix" {
   type        = string
-  description = "Prefix for all resource names."
-  default     = "fencer-siem"
+  description = "Prefix for all resource names. Required: each module instance in an AWS account needs a different prefix (for example fencer-cloudtrail, fencer-flowlogs), or the IAM role, the stream and the log group collide."
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9-]*$", var.name_prefix)) && length(var.name_prefix) <= 29

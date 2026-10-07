@@ -1,3 +1,9 @@
+# Every run sets the inputs it tests. name_prefix is required, so the runs that test other inputs
+# take it from here; the name_prefix runs override it.
+variables {
+  name_prefix = "fencer-siem"
+}
+
 mock_provider "aws" {}
 
 run "rejects_non_https_url" {
