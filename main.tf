@@ -182,12 +182,25 @@ resource "aws_flow_log" "fencer" {
   max_aggregation_interval = var.vpc_flow_log_max_aggregation_interval
   tags                     = var.tags
 
+  dynamic "tag_field_specification" {
+    for_each = var.vpc_flow_log_tag_field_specifications
+    content {
+      resource_type = tag_field_specification.value.resource_type
+      tag_keys      = tag_field_specification.value.tag_keys
+    }
+  }
+
   # One instance sends data to one Fencer data source of one type. Flow logs and CloudTrail events
   # in the same stream fail the transformation of the other type.
   lifecycle {
     precondition {
       condition     = length(var.cloudwatch_log_group_names) == 0
       error_message = "Use a different module instance for VPC flow logs. One instance sends data to one Fencer data source."
+    }
+    # AWS fills a tag field only from TagFieldSpecifications, which exist at creation only.
+    precondition {
+      condition     = !can(regex("-tag(-2)?}", var.vpc_flow_log_format)) || length(var.vpc_flow_log_tag_field_specifications) > 0
+      error_message = "vpc_flow_log_format has tag fields. Set vpc_flow_log_tag_field_specifications, or AWS cannot fill them."
     }
   }
 }
