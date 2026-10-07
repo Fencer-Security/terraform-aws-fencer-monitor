@@ -137,7 +137,7 @@ variable "vpc_flow_log_tag_field_specifications" {
 
 variable "alb_log_type" {
   type        = string
-  description = "ALB log type to deliver from the load balancers in alb_load_balancer_arns: ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS. One module instance, one Fencer data source and one stream deliver one log type. Required when alb_load_balancer_arns is not empty."
+  description = "ALB log type to deliver from the load balancers in alb_load_balancer_arns: ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS. One module instance, one Fencer data source and one stream deliver one log type. Required when alb_load_balancer_arns is not empty. A change replaces every delivery source and delivery of the instance."
   default     = null
 
   validation {

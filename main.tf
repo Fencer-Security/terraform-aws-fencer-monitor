@@ -253,4 +253,11 @@ resource "aws_cloudwatch_log_delivery" "alb" {
   delivery_source_name     = each.value.name
   delivery_destination_arn = aws_cloudwatch_log_delivery_destination.alb[0].arn
   tags                     = var.tags
+
+  # A log type change replaces the delivery source, and AWS does not delete a delivery source
+  # while a delivery uses it. Replace the delivery with its source, so Terraform deletes the
+  # delivery first.
+  lifecycle {
+    replace_triggered_by = [aws_cloudwatch_log_delivery_source.alb[each.key]]
+  }
 }
