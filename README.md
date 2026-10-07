@@ -141,21 +141,29 @@ module "fencer_monitor" {
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
   fencer_access_key   = var.fencer_access_key
 
+  # Each module instance in an AWS account must have a different name_prefix.
+  name_prefix          = "fencer-flowlogs"
   vpc_flow_log_vpc_ids = ["vpc-0123456789abcdef0"]
 }
 ```
 
 The module creates one flow log per VPC. Use one module instance per Fencer
-data source. Do not send CloudTrail and flow logs through the same instance.
+data source. Do not send CloudTrail and flow logs through the same instance;
+the module refuses VPC IDs and log group names together. Each module instance
+in an AWS account must have a different `name_prefix`: the IAM role, the
+stream and the log group take their names from it.
 
-Keep `vpc_flow_log_format` at the module default. The default is the AWS
-version 10 field set (42 fields). Fencer accepts the full field set of any
-flow log version (2 to 11) in AWS table order. Change the format only when the
-Fencer data source has a custom transformation that expects another format.
+The default `vpc_flow_log_format` is the AWS version 10 field set (42 fields).
+Fencer accepts the full field set of one flow log version in AWS table order.
+To publish another version, set `vpc_flow_log_format` to the full field set of
+that version; [`examples/vpc-flow-logs/formats.tf`](./examples/vpc-flow-logs/formats.tf)
+holds the string for versions 2 to 10. A subset or another order lands in
+Fencer as error rows.
 
-To include the version 11 tag fields, set `vpc_flow_log_format` to the version
-11 field set (54 fields). Then configure `TagFieldSpecifications` yourself. The
-module does not manage it.
+Version 11 adds tag fields that AWS fills only when `TagFieldSpecifications` is
+set at flow log creation. The module has no input for it yet (the AWS provider
+added `tag_field_specification` in v6.56.0), so do not use the version 11 field
+set with this module.
 
 The principal that runs Terraform needs these IAM permissions:
 `logs:CreateLogDelivery`, `logs:DeleteLogDelivery`,

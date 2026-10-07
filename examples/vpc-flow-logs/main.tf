@@ -34,13 +34,13 @@ variable "vpc_ids" {
 }
 
 variable "flow_log_version" {
-  description = "Flow log version to publish. Fencer accepts the full field set of versions 2, 3, 4, 5, 7, 8, 9, 10 and 11. See formats.tf."
+  description = "Flow log version to publish: 2, 3, 4, 5, 7, 8, 9 or 10. See formats.tf."
   type        = string
   default     = "10"
 
   validation {
-    condition     = contains(["2", "3", "4", "5", "7", "8", "9", "10", "11"], var.flow_log_version)
-    error_message = "flow_log_version must be one of 2, 3, 4, 5, 7, 8, 9, 10 or 11."
+    condition     = contains(["2", "3", "4", "5", "7", "8", "9", "10"], var.flow_log_version)
+    error_message = "flow_log_version must be one of 2, 3, 4, 5, 7, 8, 9 or 10."
   }
 }
 
@@ -58,11 +58,14 @@ module "fencer_monitor" {
   fencer_endpoint_url = var.fencer_endpoint_url
   fencer_access_key   = var.fencer_access_key
 
+  # Each module instance in an AWS account must have a different name_prefix. The IAM role, the
+  # stream and the log group take their names from it, and the CloudTrail example uses the default.
+  name_prefix          = "fencer-flowlogs"
   vpc_flow_log_vpc_ids = var.vpc_ids
 
   # Log format. Fencer reads the fields by position and accepts the full field set of one flow log
   # version, in the AWS order. The module default is the version 10 set (42 fields). formats.tf
-  # holds every accepted version; flow_log_version selects one.
+  # holds versions 2 to 10; flow_log_version selects one.
   #
   #   Version | Fields | Fields the version adds, in order
   #   2       | 14     | version account-id interface-id srcaddr dstaddr srcport dstport protocol
@@ -79,6 +82,8 @@ module "fencer_monitor" {
   #   11      | 54     | instance-tag instance-tag-2 interface-tag interface-tag-2 asg-tag asg-tag-2
   #           |        | interface-type next-hop-interface-id next-hop-subnet-id next-hop-az-id
   #           |        | next-hop-vpc-id next-hop-interface-type
+  #           |        | Not available with this module: the tag fields need TagFieldSpecifications
+  #           |        | at flow log creation, and the module has no input for it yet.
   vpc_flow_log_format = local.vpc_flow_log_formats[var.flow_log_version]
 }
 
