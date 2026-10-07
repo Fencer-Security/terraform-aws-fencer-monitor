@@ -234,7 +234,7 @@ permissions (`logs:PutDeliverySource`, `logs:PutDeliveryDestination`,
 `logs:CreateDelivery`, their `Get`, `Describe`, `Delete` and
 `logs:UpdateDeliveryConfiguration` counterparts), `firehose:TagDeliveryStream`,
 and `iam:CreateServiceLinkedRole` for the first log delivery to Firehose in the
-account. The module needs provider `hashicorp/aws` 5.83 or newer.
+account. The module needs provider `hashicorp/aws` 6.56.0 or newer.
 
 See [`examples/alb-access-logs`](./examples/alb-access-logs) and
 [`examples/alb-connection-logs`](./examples/alb-connection-logs).
