@@ -39,6 +39,8 @@ export TF_VAR_vpc_ids='["vpc-0123456789abcdef0"]'
 export TF_VAR_flow_log_version=10                    # optional: 2, 3, 4, 5, 7, 8, 9, 10 or 11, see formats.tf
 # Version 11 only: the tag keys to publish, by resource type.
 # export TF_VAR_tag_field_specifications='[{"resource_type":"instance","tag_keys":["Name"]}]'
+# The first apply with tag fields in an account can fail with "FlowLogs Service Linked Role is
+# not yet available" while AWS creates AWSServiceRoleForVPCFlowLogs. Apply again.
 
 terraform init
 terraform plan    # only new fencer-siem* resources plus one flow log per VPC
