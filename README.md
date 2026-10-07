@@ -24,6 +24,7 @@ module "fencer_monitor" {
   fencer_access_key   = var.fencer_access_key
 
   # The CloudWatch Logs log group your CloudTrail trail delivers into.
+  name_prefix                = "fencer-cloudtrail"
   cloudwatch_log_group_names = ["aws-cloudtrail-logs-example"]
 }
 ```
@@ -114,6 +115,7 @@ resource "aws_cloudtrail" "my_trail" {
 
 module "fencer_monitor" {
   # ...
+  name_prefix                = "fencer-cloudtrail"
   cloudwatch_log_group_names = [aws_cloudwatch_log_group.cloudtrail.name]
 }
 ```
@@ -141,21 +143,42 @@ module "fencer_monitor" {
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
   fencer_access_key   = var.fencer_access_key
 
+  # Each module instance in an AWS account must have a different name_prefix.
+  name_prefix          = "fencer-flowlogs"
   vpc_flow_log_vpc_ids = ["vpc-0123456789abcdef0"]
 }
 ```
 
 The module creates one flow log per VPC. Use one module instance per Fencer
-data source. Do not send CloudTrail and flow logs through the same instance.
+data source. Do not send CloudTrail and flow logs through the same instance;
+the module refuses VPC IDs and log group names together. Each module instance
+in an AWS account must have a different `name_prefix` (the input is required): the IAM role, the
+stream and the log group take their names from it.
 
-Keep `vpc_flow_log_format` at the module default. The default is the AWS
-version 10 field set (42 fields). Fencer accepts the full field set of any
-flow log version (2 to 11) in AWS table order. Change the format only when the
-Fencer data source has a custom transformation that expects another format.
+The default `vpc_flow_log_format` is the AWS version 10 field set (42 fields).
+Fencer accepts the full field set of one flow log version in AWS table order.
+To publish another version, set `vpc_flow_log_format` to the full field set of
+that version; [`examples/vpc-flow-logs/formats.tf`](./examples/vpc-flow-logs/formats.tf)
+holds the string for every version. A subset or another order lands in Fencer
+as error rows.
 
-To include the version 11 tag fields, set `vpc_flow_log_format` to the version
-11 field set (54 fields). Then configure `TagFieldSpecifications` yourself. The
-module does not manage it.
+Version 11 adds tag fields (`instance-tag`, `interface-tag`, `asg-tag` and
+their `-2` variants). AWS fills them only from tag field specifications set at
+flow log creation, so set `vpc_flow_log_tag_field_specifications` together
+with the version 11 format:
+
+```hcl
+  vpc_flow_log_tag_field_specifications = [
+    { resource_type = "instance", tag_keys = ["Name", "team"] },
+    { resource_type = "auto-scaling-group", tag_keys = ["Name"] },
+  ]
+```
+
+The module refuses a format with tag fields and no specifications. For the tag
+fields the principal also needs `ec2:DescribeTags` (instance and network
+interface tags) and `autoscaling:DescribeTags` (Auto Scaling group tags). Auto
+Scaling group tag values update only when the account has an enabled CloudTrail
+trail.
 
 The principal that runs Terraform needs these IAM permissions:
 `logs:CreateLogDelivery`, `logs:DeleteLogDelivery`,
@@ -234,7 +257,7 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `fencer_endpoint_url` | `string` | — | Fencer Firehose HTTP endpoint URL (from the Fencer app). |
 | `fencer_access_key` | `string` | — | Fencer access token (from the Fencer app). Sensitive. |
 | `cloudwatch_log_group_names` | `list(string)` | `[]` | Log groups to subscribe to the stream. |
-| `name_prefix` | `string` | `"fencer-siem"` | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. |
+| `name_prefix` | `string` | required | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. Each module instance in an AWS account needs a different one. |
 | `vpc_flow_log_vpc_ids` | `list(string)` | `[]` | VPCs to publish flow logs from. One flow log per VPC. Non-empty, unique entries. |
 | `vpc_flow_log_format` | `string` | AWS version 10 field set (42 fields) | Flow log format. Fencer accepts the full field set of any version (2 to 11). Any other field set needs a custom Fencer transformation. |
 | `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |

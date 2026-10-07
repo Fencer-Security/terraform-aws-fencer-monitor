@@ -93,7 +93,11 @@ resource "aws_iam_role_policy" "firehose" {
 resource "aws_kinesis_firehose_delivery_stream" "fencer" {
   name        = var.name_prefix
   destination = "http_endpoint"
-  tags        = var.tags
+  # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
+  # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log, and Terraform removes a
+  # tag that is not in the configuration on the next apply. Keep it while the module creates flow
+  # logs, so a stream that only CloudTrail uses does not get it.
+  tags = merge(var.tags, length(var.vpc_flow_log_vpc_ids) > 0 ? { LogDeliveryEnabled = "true" } : {})
 
   http_endpoint_configuration {
     url                = var.fencer_endpoint_url
@@ -178,5 +182,25 @@ resource "aws_flow_log" "fencer" {
   max_aggregation_interval = var.vpc_flow_log_max_aggregation_interval
   tags                     = var.tags
 
-  depends_on = [aws_kinesis_firehose_delivery_stream.fencer]
+  dynamic "tag_field_specification" {
+    for_each = var.vpc_flow_log_tag_field_specifications
+    content {
+      resource_type = tag_field_specification.value.resource_type
+      tag_keys      = tag_field_specification.value.tag_keys
+    }
+  }
+
+  # One instance sends data to one Fencer data source of one type. Flow logs and CloudTrail events
+  # in the same stream fail the transformation of the other type.
+  lifecycle {
+    precondition {
+      condition     = length(var.cloudwatch_log_group_names) == 0
+      error_message = "Use a different module instance for VPC flow logs. One instance sends data to one Fencer data source."
+    }
+    # AWS fills a tag field only from TagFieldSpecifications, which exist at creation only.
+    precondition {
+      condition     = !can(regex("-tag(-2)?}", var.vpc_flow_log_format)) || length(var.vpc_flow_log_tag_field_specifications) > 0
+      error_message = "vpc_flow_log_format has tag fields. Set vpc_flow_log_tag_field_specifications, or AWS cannot fill them."
+    }
+  }
 }

@@ -33,6 +33,26 @@ variable "vpc_ids" {
   type        = list(string)
 }
 
+variable "flow_log_version" {
+  description = "Flow log version to publish: 2, 3, 4, 5, 7, 8, 9, 10 or 11. See formats.tf. Version 11 also needs tag_field_specifications."
+  type        = string
+  default     = "10"
+
+  validation {
+    condition     = contains(["2", "3", "4", "5", "7", "8", "9", "10", "11"], var.flow_log_version)
+    error_message = "flow_log_version must be one of 2, 3, 4, 5, 7, 8, 9, 10 or 11."
+  }
+}
+
+variable "tag_field_specifications" {
+  description = "Tag keys to publish in the version 11 tag fields, by resource type (instance, network-interface, auto-scaling-group). Required with flow_log_version = \"11\"."
+  type = list(object({
+    resource_type = string
+    tag_keys      = list(string)
+  }))
+  default = []
+}
+
 # Permissions. The principal that runs terraform apply needs the usual rights on Firehose, IAM, S3
 # and CloudWatch Logs, plus these for the flow logs:
 #   logs:CreateLogDelivery, logs:DeleteLogDelivery   flow log delivery to Firehose
@@ -47,11 +67,14 @@ module "fencer_monitor" {
   fencer_endpoint_url = var.fencer_endpoint_url
   fencer_access_key   = var.fencer_access_key
 
+  # Each module instance in an AWS account must have a different name_prefix. The IAM role, the
+  # stream and the log group take their names from it, and the CloudTrail example uses the default.
+  name_prefix          = "fencer-flowlogs"
   vpc_flow_log_vpc_ids = var.vpc_ids
 
   # Log format. Fencer reads the fields by position and accepts the full field set of one flow log
-  # version, in the AWS order. The default is the version 10 set (42 fields). A subset, another
-  # order or an unlisted version lands in Fencer as an error row. There is no version 6.
+  # version, in the AWS order. The module default is the version 10 set (42 fields). formats.tf
+  # holds every version; flow_log_version selects one.
   #
   #   Version | Fields | Fields the version adds, in order
   #   2       | 14     | version account-id interface-id srcaddr dstaddr srcport dstport protocol
@@ -68,13 +91,10 @@ module "fencer_monitor" {
   #   11      | 54     | instance-tag instance-tag-2 interface-tag interface-tag-2 asg-tag asg-tag-2
   #           |        | interface-type next-hop-interface-id next-hop-subnet-id next-hop-az-id
   #           |        | next-hop-vpc-id next-hop-interface-type
-  #
-  # Version 11 needs TagFieldSpecifications on the flow log before AWS fills the tag fields.
-  # To use another version, set vpc_flow_log_format to every field of that version as a
-  # "$${field-name}" token (the double $ is the Terraform escape). The AWS default format,
-  # version 2:
-  #
-  # vpc_flow_log_format = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${start} $${end} $${action} $${log-status}"
+  #           |        | Version 11 also needs tag_field_specifications: AWS fills the tag fields
+  #           |        | only from them. The principal needs ec2:DescribeTags and autoscaling:DescribeTags.
+  vpc_flow_log_format                   = local.vpc_flow_log_formats[var.flow_log_version]
+  vpc_flow_log_tag_field_specifications = var.tag_field_specifications
 }
 
 output "firehose_delivery_stream_arn" {

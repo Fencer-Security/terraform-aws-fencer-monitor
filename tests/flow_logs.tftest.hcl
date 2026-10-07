@@ -29,6 +29,7 @@ mock_provider "aws" {
 variables {
   fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/test"
   fencer_access_key   = "test-token"
+  name_prefix         = "fencer-siem"
 }
 
 run "no_flow_logs_by_default" {
@@ -180,4 +181,78 @@ run "rejects_empty_format" {
   }
 
   expect_failures = [var.vpc_flow_log_format]
+}
+
+run "stream_keeps_log_delivery_tag" {
+  command = plan
+
+  variables {
+    vpc_flow_log_vpc_ids = ["vpc-0aaa1111"]
+    tags                 = { team = "security" }
+  }
+
+  assert {
+    condition     = aws_kinesis_firehose_delivery_stream.fencer.tags["LogDeliveryEnabled"] == "true" && aws_kinesis_firehose_delivery_stream.fencer.tags["team"] == "security"
+    error_message = "The stream must have LogDeliveryEnabled=true when the module creates flow logs."
+  }
+}
+
+run "no_log_delivery_tag_without_flow_logs" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(aws_kinesis_firehose_delivery_stream.fencer.tags), "LogDeliveryEnabled")
+    error_message = "The stream must not have LogDeliveryEnabled when the module creates no flow logs."
+  }
+}
+
+run "rejects_flow_logs_and_log_groups_together" {
+  command = plan
+
+  variables {
+    vpc_flow_log_vpc_ids       = ["vpc-0aaa1111"]
+    cloudwatch_log_group_names = ["/aws/cloudtrail/test"]
+  }
+
+  expect_failures = [aws_flow_log.fencer]
+}
+
+run "tag_field_specifications_reach_the_flow_log" {
+  command = apply
+
+  variables {
+    vpc_flow_log_vpc_ids = ["vpc-0aaa1111"]
+    vpc_flow_log_format  = "$${version} $${instance-tag} $${asg-tag}"
+    vpc_flow_log_tag_field_specifications = [
+      { resource_type = "instance", tag_keys = ["Name"] },
+      { resource_type = "auto-scaling-group", tag_keys = ["team"] },
+    ]
+  }
+
+  assert {
+    condition     = length(aws_flow_log.fencer["vpc-0aaa1111"].tag_field_specification) == 2
+    error_message = "Each tag field specification must reach the flow log."
+  }
+}
+
+run "rejects_tag_fields_without_specifications" {
+  command = plan
+
+  variables {
+    vpc_flow_log_vpc_ids = ["vpc-0aaa1111"]
+    vpc_flow_log_format  = "$${version} $${interface-tag-2}"
+  }
+
+  expect_failures = [aws_flow_log.fencer]
+}
+
+run "rejects_unknown_tag_resource_type" {
+  command = plan
+
+  variables {
+    vpc_flow_log_vpc_ids                  = ["vpc-0aaa1111"]
+    vpc_flow_log_tag_field_specifications = [{ resource_type = "subnet", tag_keys = ["Name"] }]
+  }
+
+  expect_failures = [var.vpc_flow_log_tag_field_specifications]
 }

@@ -32,8 +32,7 @@ variable "cloudwatch_log_group_names" {
 
 variable "name_prefix" {
   type        = string
-  description = "Prefix for all resource names."
-  default     = "fencer-siem"
+  description = "Prefix for all resource names. Required: each module instance in an AWS account needs a different prefix (for example fencer-cloudtrail, fencer-flowlogs), or the IAM role, the stream and the log group collide."
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9-]*$", var.name_prefix)) && length(var.name_prefix) <= 29
@@ -116,5 +115,22 @@ variable "vpc_flow_log_max_aggregation_interval" {
   validation {
     condition     = contains([60, 600], var.vpc_flow_log_max_aggregation_interval)
     error_message = "vpc_flow_log_max_aggregation_interval must be 60 or 600."
+  }
+}
+
+variable "vpc_flow_log_tag_field_specifications" {
+  type = list(object({
+    resource_type = string
+    tag_keys      = list(string)
+  }))
+  description = "Tag keys to publish in the version 11 tag fields (instance-tag, interface-tag, asg-tag and their -2 variants), by resource type: instance, network-interface or auto-scaling-group. Required when vpc_flow_log_format has a tag field. The principal needs ec2:DescribeTags for instance and network-interface tags and autoscaling:DescribeTags for Auto Scaling group tags."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for spec in var.vpc_flow_log_tag_field_specifications :
+      contains(["instance", "network-interface", "auto-scaling-group"], spec.resource_type)
+    ])
+    error_message = "resource_type must be instance, network-interface or auto-scaling-group."
   }
 }

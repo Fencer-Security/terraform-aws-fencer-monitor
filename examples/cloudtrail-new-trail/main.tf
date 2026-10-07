@@ -163,6 +163,8 @@ module "fencer_monitor" {
   fencer_endpoint_url = var.fencer_endpoint_url
   fencer_access_key   = var.fencer_access_key
 
+  # Each module instance in an AWS account must have a different name_prefix.
+  name_prefix                = "fencer-cloudtrail"
   cloudwatch_log_group_names = [aws_cloudwatch_log_group.cloudtrail.name]
 }
 
