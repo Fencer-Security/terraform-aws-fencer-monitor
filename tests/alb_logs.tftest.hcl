@@ -158,6 +158,30 @@ run "rejects_load_balancers_without_a_log_type" {
   expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
 }
 
+run "rejects_load_balancers_and_vpcs_together" {
+  command = plan
+
+  variables {
+    alb_log_type           = "ALB_ACCESS_LOGS"
+    alb_load_balancer_arns = [var.alb_a]
+    vpc_flow_log_vpc_ids   = ["vpc-0aaa1111"]
+  }
+
+  expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
+}
+
+run "rejects_load_balancers_and_log_groups_together" {
+  command = plan
+
+  variables {
+    alb_log_type               = "ALB_ACCESS_LOGS"
+    alb_load_balancer_arns     = [var.alb_a]
+    cloudwatch_log_group_names = ["/aws/cloudtrail/test"]
+  }
+
+  expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
+}
+
 run "rejects_unknown_log_type" {
   command = plan
 

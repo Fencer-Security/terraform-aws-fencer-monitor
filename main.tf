@@ -146,6 +146,12 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
       condition     = length(var.alb_load_balancer_arns) == 0 || var.alb_log_type != null
       error_message = "Set alb_log_type to ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS when alb_load_balancer_arns is not empty. One module instance delivers one log type."
     }
+    # One instance sends data to one Fencer data source of one type. Records of a second type in
+    # the same stream fail the transformation of the first.
+    precondition {
+      condition     = (length(var.cloudwatch_log_group_names) > 0 ? 1 : 0) + (length(var.vpc_flow_log_vpc_ids) > 0 ? 1 : 0) + (length(var.alb_load_balancer_arns) > 0 ? 1 : 0) <= 1
+      error_message = "Set only one of cloudwatch_log_group_names, vpc_flow_log_vpc_ids and alb_load_balancer_arns. One module instance sends data to one Fencer data source."
+    }
   }
 }
 
@@ -207,13 +213,7 @@ resource "aws_flow_log" "fencer" {
     }
   }
 
-  # One instance sends data to one Fencer data source of one type. Flow logs and CloudTrail events
-  # in the same stream fail the transformation of the other type.
   lifecycle {
-    precondition {
-      condition     = length(var.cloudwatch_log_group_names) == 0
-      error_message = "Use a different module instance for VPC flow logs. One instance sends data to one Fencer data source."
-    }
     # AWS fills a tag field only from TagFieldSpecifications, which exist at creation only.
     precondition {
       condition     = !can(regex("-tag(-2)?}", var.vpc_flow_log_format)) || length(var.vpc_flow_log_tag_field_specifications) > 0

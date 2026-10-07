@@ -214,7 +214,7 @@ run "rejects_flow_logs_and_log_groups_together" {
     cloudwatch_log_group_names = ["/aws/cloudtrail/test"]
   }
 
-  expect_failures = [aws_flow_log.fencer]
+  expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
 }
 
 run "tag_field_specifications_reach_the_flow_log" {
