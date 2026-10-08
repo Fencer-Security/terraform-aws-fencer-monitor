@@ -180,6 +180,14 @@ interface tags) and `autoscaling:DescribeTags` (Auto Scaling group tags). Auto
 Scaling group tag values update only when the account has an enabled CloudTrail
 trail.
 
+The first flow log with tag fields in an AWS account makes AWS create the
+service-linked role `AWSServiceRoleForVPCFlowLogs`. That first `terraform apply`
+can fail with `IncorrectState: FlowLogs Service Linked Role is not yet
+available`. Run `terraform apply` again; the role exists from then on. The
+module does not manage the role: it belongs to the account, not to one
+instance, and AWS refuses to delete it while any flow log with tag fields
+exists.
+
 The principal that runs Terraform needs these IAM permissions:
 `logs:CreateLogDelivery`, `logs:DeleteLogDelivery`,
 `iam:CreateServiceLinkedRole`, and `firehose:TagDeliveryStream`. For the ECS
