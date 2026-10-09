@@ -254,7 +254,9 @@ and a delivery destination with the same names, but `CreateDelivery` for a
 source and destination that already have a delivery fails.
 
 See [`examples/alb-access-logs`](./examples/alb-access-logs) and
-[`examples/alb-connection-logs`](./examples/alb-connection-logs).
+[`examples/alb-connection-logs`](./examples/alb-connection-logs), or
+[`examples/alb-logs`](./examples/alb-logs) for both log types in one
+configuration.
 
 ### What gets created
 
@@ -300,6 +302,7 @@ apply, verify, clean up):
 | [`examples/vpc-flow-logs`](./examples/vpc-flow-logs) | VPC flow logs that deliver straight to the stream. |
 | [`examples/alb-access-logs`](./examples/alb-access-logs) | ALB access logs through a CloudWatch log delivery to the stream. |
 | [`examples/alb-connection-logs`](./examples/alb-connection-logs) | ALB connection logs through a CloudWatch log delivery to the stream. |
+| [`examples/alb-logs`](./examples/alb-logs) | Both ALB log types from one configuration: two instances, two Fencer data sources. |
 
 ### Verify
 
