@@ -26,32 +26,6 @@ run "no_subscription_resources_by_default" {
   }
 }
 
-# A 1.2 configuration passes a list. The name is the instance key, as toset() made it, so the
-# upgrade replaces no filter.
-run "deprecated_list_keeps_the_name_as_the_key" {
-  command = plan
-
-  variables {
-    cloudwatch_log_group_names = ["aws-cloudtrail-logs-example"]
-  }
-
-  assert {
-    condition     = aws_cloudwatch_log_subscription_filter.fencer["aws-cloudtrail-logs-example"].log_group_name == "aws-cloudtrail-logs-example"
-    error_message = "The deprecated list must create the filter under the log group name."
-  }
-}
-
-run "rejects_a_log_group_in_the_list_and_the_map" {
-  command = plan
-
-  variables {
-    cloudwatch_log_group_names = ["aws-cloudtrail-logs-example"]
-    cloudwatch_log_groups      = { cloudtrail = "aws-cloudtrail-logs-example" }
-  }
-
-  expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
-}
-
 run "one_filter_per_log_group" {
   command = plan
 

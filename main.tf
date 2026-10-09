@@ -92,17 +92,13 @@ resource "aws_iam_role_policy" "firehose" {
 }
 
 locals {
-  # The deprecated 1.2 list inputs map each value to itself, the instance key that toset() made in
-  # 1.2, so an upgraded configuration replaces no subscription filter and no flow log.
-  cloudwatch_log_groups = merge({ for name in var.cloudwatch_log_group_names : name => name }, var.cloudwatch_log_groups)
-  vpc_flow_logs         = merge({ for id in var.vpc_flow_log_vpc_ids : id => id }, var.vpc_flow_logs)
-  alb_logs_enabled      = length(var.alb_load_balancers) > 0 && var.alb_log_type != null
+  alb_logs_enabled = length(var.alb_load_balancers) > 0 && var.alb_log_type != null
   # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
   # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log or a log delivery, and
   # Terraform removes a tag that is not in the configuration on the next apply. Keep it while the
   # module creates flow logs or ALB log deliveries, so a stream that only CloudTrail uses does not
   # get it.
-  stream_tags = merge(var.tags, length(local.vpc_flow_logs) > 0 || local.alb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
+  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
 }
 
 resource "aws_kinesis_firehose_delivery_stream" "fencer" {
@@ -152,20 +148,14 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
     # One instance sends data to one Fencer data source of one type. Records of a second type in
     # the same stream fail the transformation of the first.
     precondition {
-      condition     = (length(local.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(local.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) <= 1
+      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) <= 1
       error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs and alb_load_balancers. One module instance sends data to one Fencer data source."
-    }
-    # A value in the deprecated list and in the map, under another key, would make two filters or
-    # two flow logs for one resource.
-    precondition {
-      condition     = length(distinct(values(local.cloudwatch_log_groups))) == length(local.cloudwatch_log_groups) && length(distinct(values(local.vpc_flow_logs))) == length(local.vpc_flow_logs)
-      error_message = "A log group or a VPC appears under two keys. Set each one once, in the map input or in the deprecated list input."
     }
   }
 }
 
 resource "aws_iam_role" "cloudwatch_to_firehose" {
-  count = length(local.cloudwatch_log_groups) > 0 ? 1 : 0
+  count = length(var.cloudwatch_log_groups) > 0 ? 1 : 0
   name  = "${var.name_prefix}-cw-subscription"
   tags  = var.tags
   assume_role_policy = jsonencode({
@@ -180,7 +170,7 @@ resource "aws_iam_role" "cloudwatch_to_firehose" {
 }
 
 resource "aws_iam_role_policy" "cloudwatch_to_firehose" {
-  count = length(local.cloudwatch_log_groups) > 0 ? 1 : 0
+  count = length(var.cloudwatch_log_groups) > 0 ? 1 : 0
   name  = "${var.name_prefix}-cw-subscription"
   role  = aws_iam_role.cloudwatch_to_firehose[0].id
   policy = jsonencode({
@@ -194,7 +184,7 @@ resource "aws_iam_role_policy" "cloudwatch_to_firehose" {
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "fencer" {
-  for_each        = local.cloudwatch_log_groups
+  for_each        = var.cloudwatch_log_groups
   name            = var.name_prefix
   role_arn        = aws_iam_role.cloudwatch_to_firehose[0].arn
   log_group_name  = each.value
@@ -205,7 +195,7 @@ resource "aws_cloudwatch_log_subscription_filter" "fencer" {
 }
 
 resource "aws_flow_log" "fencer" {
-  for_each                 = local.vpc_flow_logs
+  for_each                 = var.vpc_flow_logs
   vpc_id                   = each.value
   traffic_type             = var.vpc_flow_log_traffic_type
   log_destination_type     = "kinesis-data-firehose"
