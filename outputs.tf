@@ -24,21 +24,21 @@ output "firehose_role_arn" {
 }
 
 output "cloudwatch_to_firehose_role_arn" {
-  description = "ARN of the IAM role CloudWatch Logs assumes for the subscription filters. Null when cloudwatch_log_group_names is empty."
+  description = "ARN of the IAM role CloudWatch Logs assumes for the subscription filters. Null when cloudwatch_log_groups is empty."
   value       = one(aws_iam_role.cloudwatch_to_firehose[*].arn)
 }
 
 output "flow_log_ids" {
-  description = "Map of VPC ID to flow log ID. Empty when vpc_flow_log_vpc_ids is empty."
+  description = "Map of vpc_flow_logs key to flow log ID. Empty when vpc_flow_logs is empty."
   value       = { for k, v in aws_flow_log.fencer : k => v.id }
 }
 
 output "alb_log_delivery_destination_arn" {
-  description = "ARN of the CloudWatch log delivery destination that points at the stream. Null when alb_load_balancer_arns is empty."
+  description = "ARN of the CloudWatch log delivery destination that points at the stream. Null when alb_load_balancers is empty."
   value       = one(aws_cloudwatch_log_delivery_destination.alb[*].arn)
 }
 
 output "alb_log_delivery_ids" {
-  description = "Map of load balancer ARN to CloudWatch log delivery ID. Empty when alb_load_balancer_arns is empty."
+  description = "Map of alb_load_balancers key to CloudWatch log delivery ID. Empty when alb_load_balancers is empty."
   value       = { for k, v in aws_cloudwatch_log_delivery.alb : k => v.id }
 }

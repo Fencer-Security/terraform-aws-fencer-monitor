@@ -19,14 +19,14 @@ variable "fencer_access_key" {
   }
 }
 
-variable "cloudwatch_log_group_names" {
-  type        = list(string)
-  description = "CloudWatch Logs log groups to stream to Fencer. The module creates one subscription filter per log group. Leave empty when the AWS service writes to the Firehose stream directly."
-  default     = []
+variable "cloudwatch_log_groups" {
+  type        = map(string)
+  description = "CloudWatch Logs log groups to stream to Fencer, as a map of a key of your choice to the log group name. The key is the Terraform instance key, so a log group created in the same apply works. The module creates one subscription filter per log group. Leave empty when the AWS service writes to the Firehose stream directly."
+  default     = {}
 
   validation {
-    condition     = alltrue([for name in var.cloudwatch_log_group_names : length(name) > 0]) && length(var.cloudwatch_log_group_names) == length(distinct(var.cloudwatch_log_group_names))
-    error_message = "cloudwatch_log_group_names entries must be non-empty and unique."
+    condition     = alltrue([for name in values(var.cloudwatch_log_groups) : length(name) > 0]) && length(values(var.cloudwatch_log_groups)) == length(distinct(values(var.cloudwatch_log_groups)))
+    error_message = "cloudwatch_log_groups values must be non-empty and unique log group names."
   }
 }
 
@@ -74,14 +74,14 @@ variable "tags" {
   default     = {}
 }
 
-variable "vpc_flow_log_vpc_ids" {
-  type        = list(string)
-  description = "IDs of the VPCs to publish flow logs from. The module creates one flow log per VPC and delivers it straight to the Firehose stream. The VPCs must be in the same account and region as the stream. Leave empty to create no flow logs."
-  default     = []
+variable "vpc_flow_logs" {
+  type        = map(string)
+  description = "VPCs to publish flow logs from, as a map of a key of your choice to the VPC ID. The key is the Terraform instance key, so a VPC created in the same apply works. The module creates one flow log per VPC and delivers it straight to the Firehose stream. The VPCs must be in the same account and region as the stream. Leave empty to create no flow logs."
+  default     = {}
 
   validation {
-    condition     = alltrue([for id in var.vpc_flow_log_vpc_ids : length(id) > 0]) && length(var.vpc_flow_log_vpc_ids) == length(distinct(var.vpc_flow_log_vpc_ids))
-    error_message = "vpc_flow_log_vpc_ids entries must be non-empty and unique."
+    condition     = alltrue([for id in values(var.vpc_flow_logs) : length(id) > 0]) && length(values(var.vpc_flow_logs)) == length(distinct(values(var.vpc_flow_logs)))
+    error_message = "vpc_flow_logs values must be non-empty and unique VPC IDs."
   }
 }
 
@@ -137,7 +137,7 @@ variable "vpc_flow_log_tag_field_specifications" {
 
 variable "alb_log_type" {
   type        = string
-  description = "ALB log type to deliver from the load balancers in alb_load_balancer_arns: ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS. One module instance, one Fencer data source and one stream deliver one log type. Required when alb_load_balancer_arns is not empty. A change replaces every delivery source and delivery of the instance."
+  description = "ALB log type to deliver from the load balancers in alb_load_balancers: ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS. One module instance, one Fencer data source and one stream deliver one log type. Required when alb_load_balancers is not empty. A change replaces every delivery source and delivery of the instance."
   default     = null
 
   validation {
@@ -146,13 +146,18 @@ variable "alb_log_type" {
   }
 }
 
-variable "alb_load_balancer_arns" {
-  type        = list(string)
-  description = "ARNs of the Application Load Balancers whose logs of type alb_log_type the module delivers to the Firehose stream as JSON. The module creates one CloudWatch log delivery per load balancer. The load balancers must be in the same account and region as the stream. Leave empty to create no log delivery."
-  default     = []
+variable "alb_load_balancers" {
+  type        = map(string)
+  description = "Application Load Balancers whose logs of type alb_log_type the module delivers to the Firehose stream as JSON, as a map of a key of your choice to the load balancer ARN. The key names the delivery source (<name_prefix>-<key>) and is the Terraform instance key, so a load balancer created in the same apply works. The module creates one CloudWatch log delivery per load balancer. The load balancers must be in the same account and region as the stream. Leave empty to create no log delivery."
+  default     = {}
 
   validation {
-    condition     = alltrue([for arn in var.alb_load_balancer_arns : can(regex("^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:loadbalancer/app/[^/]+/[0-9a-f]+$", arn))]) && length(var.alb_load_balancer_arns) == length(distinct(var.alb_load_balancer_arns))
-    error_message = "alb_load_balancer_arns entries must be unique Application Load Balancer ARNs (arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/app/<name>/<id>)."
+    condition     = alltrue([for key in keys(var.alb_load_balancers) : can(regex("^[a-z0-9][a-z0-9-]*$", key))])
+    error_message = "alb_load_balancers keys must start with a lowercase letter or digit and match ^[a-z0-9][a-z0-9-]*$; the key names the delivery source."
+  }
+
+  validation {
+    condition     = alltrue([for arn in values(var.alb_load_balancers) : can(regex("^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:loadbalancer/app/[^/]+/[0-9a-f]+$", arn))]) && length(values(var.alb_load_balancers)) == length(distinct(values(var.alb_load_balancers)))
+    error_message = "alb_load_balancers values must be unique Application Load Balancer ARNs (arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/app/<name>/<id>)."
   }
 }

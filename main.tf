@@ -91,15 +91,13 @@ resource "aws_iam_role_policy" "firehose" {
 }
 
 locals {
-  alb_logs_enabled = length(var.alb_load_balancer_arns) > 0 && var.alb_log_type != null
-  # Load balancer name: the segment between "loadbalancer/app/" and the next "/" in the ARN.
-  alb_names = { for arn in var.alb_load_balancer_arns : arn => split("/", arn)[2] }
+  alb_logs_enabled = length(var.alb_load_balancers) > 0 && var.alb_log_type != null
   # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
   # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log or a log delivery, and
   # Terraform removes a tag that is not in the configuration on the next apply. Keep it while the
   # module creates flow logs or ALB log deliveries, so a stream that only CloudTrail uses does not
   # get it.
-  stream_tags = merge(var.tags, length(var.vpc_flow_log_vpc_ids) > 0 || local.alb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
+  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
 }
 
 resource "aws_kinesis_firehose_delivery_stream" "fencer" {
@@ -143,20 +141,20 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
     # Checked here, on a resource that always exists, so a missing log type fails the plan with
     # this message instead of a provider error on the delivery source.
     precondition {
-      condition     = length(var.alb_load_balancer_arns) == 0 || var.alb_log_type != null
-      error_message = "Set alb_log_type to ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS when alb_load_balancer_arns is not empty. One module instance delivers one log type."
+      condition     = length(var.alb_load_balancers) == 0 || var.alb_log_type != null
+      error_message = "Set alb_log_type to ALB_ACCESS_LOGS or ALB_CONNECTION_LOGS when alb_load_balancers is not empty. One module instance delivers one log type."
     }
     # One instance sends data to one Fencer data source of one type. Records of a second type in
     # the same stream fail the transformation of the first.
     precondition {
-      condition     = (length(var.cloudwatch_log_group_names) > 0 ? 1 : 0) + (length(var.vpc_flow_log_vpc_ids) > 0 ? 1 : 0) + (length(var.alb_load_balancer_arns) > 0 ? 1 : 0) <= 1
-      error_message = "Set only one of cloudwatch_log_group_names, vpc_flow_log_vpc_ids and alb_load_balancer_arns. One module instance sends data to one Fencer data source."
+      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) <= 1
+      error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs and alb_load_balancers. One module instance sends data to one Fencer data source."
     }
   }
 }
 
 resource "aws_iam_role" "cloudwatch_to_firehose" {
-  count = length(var.cloudwatch_log_group_names) > 0 ? 1 : 0
+  count = length(var.cloudwatch_log_groups) > 0 ? 1 : 0
   name  = "${var.name_prefix}-cw-subscription"
   tags  = var.tags
   assume_role_policy = jsonencode({
@@ -171,7 +169,7 @@ resource "aws_iam_role" "cloudwatch_to_firehose" {
 }
 
 resource "aws_iam_role_policy" "cloudwatch_to_firehose" {
-  count = length(var.cloudwatch_log_group_names) > 0 ? 1 : 0
+  count = length(var.cloudwatch_log_groups) > 0 ? 1 : 0
   name  = "${var.name_prefix}-cw-subscription"
   role  = aws_iam_role.cloudwatch_to_firehose[0].id
   policy = jsonencode({
@@ -185,7 +183,7 @@ resource "aws_iam_role_policy" "cloudwatch_to_firehose" {
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "fencer" {
-  for_each        = toset(var.cloudwatch_log_group_names)
+  for_each        = var.cloudwatch_log_groups
   name            = var.name_prefix
   role_arn        = aws_iam_role.cloudwatch_to_firehose[0].arn
   log_group_name  = each.value
@@ -196,7 +194,7 @@ resource "aws_cloudwatch_log_subscription_filter" "fencer" {
 }
 
 resource "aws_flow_log" "fencer" {
-  for_each                 = toset(var.vpc_flow_log_vpc_ids)
+  for_each                 = var.vpc_flow_logs
   vpc_id                   = each.value
   traffic_type             = var.vpc_flow_log_traffic_type
   log_destination_type     = "kinesis-data-firehose"
@@ -234,16 +232,16 @@ resource "aws_cloudwatch_log_delivery_destination" "alb" {
 }
 
 resource "aws_cloudwatch_log_delivery_source" "alb" {
-  for_each     = local.alb_logs_enabled ? local.alb_names : {}
-  name         = "${var.name_prefix}-${each.value}"
+  for_each     = local.alb_logs_enabled ? var.alb_load_balancers : {}
+  name         = "${var.name_prefix}-${each.key}"
   log_type     = var.alb_log_type
-  resource_arn = each.key
+  resource_arn = each.value
   tags         = var.tags
 
   lifecycle {
     precondition {
-      condition     = length("${var.name_prefix}-${each.value}") <= 60
-      error_message = "The delivery source name <name_prefix>-<load balancer name> must be at most 60 characters. Use a shorter name_prefix."
+      condition     = length("${var.name_prefix}-${each.key}") <= 60
+      error_message = "The delivery source name <name_prefix>-<key> must be at most 60 characters. Use a shorter name_prefix or a shorter alb_load_balancers key."
     }
   }
 }

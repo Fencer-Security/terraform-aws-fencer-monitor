@@ -32,9 +32,9 @@ variable "fencer_access_key" {
   sensitive   = true
 }
 
-variable "load_balancer_arns" {
-  description = "ARNs of the Application Load Balancers to deliver logs from."
-  type        = list(string)
+variable "load_balancers" {
+  description = "Application Load Balancers to deliver logs from: a key of your choice to the load balancer ARN. The key names the delivery source (<name_prefix>-<key>)."
+  type        = map(string)
 }
 
 # Permissions. The principal that runs terraform apply needs the usual rights on Firehose, IAM, S3
@@ -55,8 +55,8 @@ module "fencer_monitor" {
   # One prefix per log type, so the instances for both log types do not collide in one account.
   name_prefix = "fencer-alb-connection-logs"
 
-  alb_log_type           = "ALB_CONNECTION_LOGS"
-  alb_load_balancer_arns = var.load_balancer_arns
+  alb_log_type       = "ALB_CONNECTION_LOGS"
+  alb_load_balancers = var.load_balancers
 }
 
 output "firehose_delivery_stream_arn" {
@@ -70,7 +70,7 @@ output "firehose_delivery_stream_name" {
 }
 
 output "alb_log_delivery_ids" {
-  description = "Map of load balancer ARN to CloudWatch log delivery ID."
+  description = "Map of load_balancers key to CloudWatch log delivery ID."
   value       = module.fencer_monitor.alb_log_delivery_ids
 }
 

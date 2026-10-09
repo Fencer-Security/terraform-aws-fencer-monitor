@@ -37,7 +37,7 @@ aws elbv2 describe-load-balancers --query 'LoadBalancers[?Type==`application`].[
 ```sh
 export TF_VAR_fencer_endpoint_url="https://..."       # from the Fencer app
 export TF_VAR_fencer_access_key="..."                 # from the Fencer app
-export TF_VAR_load_balancer_arns='["arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-lb/50dc6c495c0c9188"]'
+export TF_VAR_load_balancers='{"my-lb":"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-lb/50dc6c495c0c9188"}'
 
 terraform init
 terraform plan    # only new fencer-alb-connection-logs* resources plus one delivery per load balancer

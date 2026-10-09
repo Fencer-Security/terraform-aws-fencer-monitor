@@ -59,8 +59,8 @@ run "one_delivery_per_load_balancer" {
   command = apply
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = [var.alb_a, var.alb_b]
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = var.alb_a, api = var.alb_b }
   }
 
   assert {
@@ -84,17 +84,17 @@ run "one_delivery_per_load_balancer" {
   }
 
   assert {
-    condition     = aws_cloudwatch_log_delivery_source.alb[var.alb_a].name == "fencer-siem-web-prod"
-    error_message = "The delivery source name must be <name_prefix>-<load balancer name>."
+    condition     = aws_cloudwatch_log_delivery_source.alb["web"].name == "fencer-siem-web"
+    error_message = "The delivery source name must be <name_prefix>-<key>."
   }
 
   assert {
-    condition     = aws_cloudwatch_log_delivery_source.alb[var.alb_a].log_type == "ALB_ACCESS_LOGS" && aws_cloudwatch_log_delivery_source.alb[var.alb_a].resource_arn == var.alb_a
+    condition     = aws_cloudwatch_log_delivery_source.alb["web"].log_type == "ALB_ACCESS_LOGS" && aws_cloudwatch_log_delivery_source.alb["web"].resource_arn == var.alb_a
     error_message = "Each delivery source must carry the log type and its load balancer ARN."
   }
 
   assert {
-    condition     = aws_cloudwatch_log_delivery.alb[var.alb_a].delivery_source_name == "fencer-siem-web-prod" && aws_cloudwatch_log_delivery.alb[var.alb_a].delivery_destination_arn == aws_cloudwatch_log_delivery_destination.alb[0].arn
+    condition     = aws_cloudwatch_log_delivery.alb["web"].delivery_source_name == "fencer-siem-web" && aws_cloudwatch_log_delivery.alb["web"].delivery_destination_arn == aws_cloudwatch_log_delivery_destination.alb[0].arn
     error_message = "Each delivery must link its source to the module's destination."
   }
 
@@ -104,8 +104,8 @@ run "one_delivery_per_load_balancer" {
   }
 
   assert {
-    condition     = length(output.alb_log_delivery_ids) == 2 && contains(keys(output.alb_log_delivery_ids), var.alb_a)
-    error_message = "alb_log_delivery_ids must map each load balancer ARN to its delivery."
+    condition     = length(output.alb_log_delivery_ids) == 2 && contains(keys(output.alb_log_delivery_ids), "web")
+    error_message = "alb_log_delivery_ids must map each alb_load_balancers key to its delivery."
   }
 
   assert {
@@ -118,12 +118,12 @@ run "connection_logs_use_their_log_type" {
   command = plan
 
   variables {
-    alb_log_type           = "ALB_CONNECTION_LOGS"
-    alb_load_balancer_arns = [var.alb_a]
+    alb_log_type       = "ALB_CONNECTION_LOGS"
+    alb_load_balancers = { web = var.alb_a }
   }
 
   assert {
-    condition     = aws_cloudwatch_log_delivery_source.alb[var.alb_a].log_type == "ALB_CONNECTION_LOGS"
+    condition     = aws_cloudwatch_log_delivery_source.alb["web"].log_type == "ALB_CONNECTION_LOGS"
     error_message = "The delivery source must carry ALB_CONNECTION_LOGS."
   }
 }
@@ -132,9 +132,9 @@ run "stream_keeps_module_tags_with_the_delivery_tag" {
   command = plan
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = [var.alb_a]
-    tags                   = { team = "security" }
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = var.alb_a }
+    tags               = { team = "security" }
   }
 
   assert {
@@ -143,7 +143,7 @@ run "stream_keeps_module_tags_with_the_delivery_tag" {
   }
 
   assert {
-    condition     = aws_cloudwatch_log_delivery_source.alb[var.alb_a].tags["team"] == "security"
+    condition     = aws_cloudwatch_log_delivery_source.alb["web"].tags["team"] == "security"
     error_message = "Delivery sources must carry the module tags."
   }
 }
@@ -152,7 +152,7 @@ run "rejects_load_balancers_without_a_log_type" {
   command = plan
 
   variables {
-    alb_load_balancer_arns = [var.alb_a]
+    alb_load_balancers = { web = var.alb_a }
   }
 
   expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
@@ -162,9 +162,9 @@ run "rejects_load_balancers_and_vpcs_together" {
   command = plan
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = [var.alb_a]
-    vpc_flow_log_vpc_ids   = ["vpc-0aaa1111"]
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = var.alb_a }
+    vpc_flow_logs      = { main = "vpc-0aaa1111" }
   }
 
   expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
@@ -174,9 +174,9 @@ run "rejects_load_balancers_and_log_groups_together" {
   command = plan
 
   variables {
-    alb_log_type               = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns     = [var.alb_a]
-    cloudwatch_log_group_names = ["/aws/cloudtrail/test"]
+    alb_log_type          = "ALB_ACCESS_LOGS"
+    alb_load_balancers    = { web = var.alb_a }
+    cloudwatch_log_groups = { cloudtrail = "/aws/cloudtrail/test" }
   }
 
   expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
@@ -187,8 +187,8 @@ run "rejects_health_check_logs" {
   command = plan
 
   variables {
-    alb_log_type           = "ALB_HEALTH_CHECK_LOGS"
-    alb_load_balancer_arns = [var.alb_a]
+    alb_log_type       = "ALB_HEALTH_CHECK_LOGS"
+    alb_load_balancers = { web = var.alb_a }
   }
 
   expect_failures = [var.alb_log_type]
@@ -198,42 +198,53 @@ run "rejects_duplicate_load_balancer_arns" {
   command = plan
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = [var.alb_a, var.alb_a]
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = var.alb_a, web2 = var.alb_a }
   }
 
-  expect_failures = [var.alb_load_balancer_arns]
+  expect_failures = [var.alb_load_balancers]
+}
+
+run "rejects_a_key_that_cannot_name_a_delivery_source" {
+  command = plan
+
+  variables {
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { "Web Prod" = var.alb_a }
+  }
+
+  expect_failures = [var.alb_load_balancers]
 }
 
 run "rejects_a_load_balancer_name_instead_of_an_arn" {
   command = plan
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = ["app/web-prod/50dc6c495c0c9188"]
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = "app/web-prod/50dc6c495c0c9188" }
   }
 
-  expect_failures = [var.alb_load_balancer_arns]
+  expect_failures = [var.alb_load_balancers]
 }
 
 run "rejects_a_network_load_balancer_arn" {
   command = plan
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = ["arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/net/web-prod/50dc6c495c0c9188"]
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/net/web-prod/50dc6c495c0c9188" }
   }
 
-  expect_failures = [var.alb_load_balancer_arns]
+  expect_failures = [var.alb_load_balancers]
 }
 
 run "rejects_a_delivery_source_name_over_60_characters" {
   command = plan
 
   variables {
-    name_prefix            = "fencer-siem-alb-access-logs-x"
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = ["arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/a-very-long-load-balancer-name-12/50dc6c495c0c9188"]
+    name_prefix        = "fencer-siem-alb-access-logs-x"
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { a-very-long-load-balancer-key-1 = var.alb_a }
   }
 
   expect_failures = [aws_cloudwatch_log_delivery_source.alb]
@@ -243,9 +254,9 @@ run "deliveries_exist" {
   command = apply
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = [var.alb_a]
-    tags                   = { team = "a" }
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = var.alb_a }
+    tags               = { team = "a" }
   }
 }
 
@@ -253,13 +264,13 @@ run "tag_change_keeps_the_delivery" {
   command = apply
 
   variables {
-    alb_log_type           = "ALB_ACCESS_LOGS"
-    alb_load_balancer_arns = [var.alb_a]
-    tags                   = { team = "b" }
+    alb_log_type       = "ALB_ACCESS_LOGS"
+    alb_load_balancers = { web = var.alb_a }
+    tags               = { team = "b" }
   }
 
   assert {
-    condition     = output.alb_log_delivery_ids[var.alb_a] == run.deliveries_exist.alb_log_delivery_ids[var.alb_a]
+    condition     = output.alb_log_delivery_ids["web"] == run.deliveries_exist.alb_log_delivery_ids["web"]
     error_message = "A tag change must not replace the delivery."
   }
 }
@@ -268,13 +279,13 @@ run "log_type_change_replaces_the_delivery" {
   command = apply
 
   variables {
-    alb_log_type           = "ALB_CONNECTION_LOGS"
-    alb_load_balancer_arns = [var.alb_a]
-    tags                   = { team = "b" }
+    alb_log_type       = "ALB_CONNECTION_LOGS"
+    alb_load_balancers = { web = var.alb_a }
+    tags               = { team = "b" }
   }
 
   assert {
-    condition     = output.alb_log_delivery_ids[var.alb_a] != run.tag_change_keeps_the_delivery.alb_log_delivery_ids[var.alb_a]
+    condition     = output.alb_log_delivery_ids["web"] != run.tag_change_keeps_the_delivery.alb_log_delivery_ids["web"]
     error_message = "A log type change must replace the delivery."
   }
 }

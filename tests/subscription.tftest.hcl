@@ -30,10 +30,10 @@ run "one_filter_per_log_group" {
   command = plan
 
   variables {
-    cloudwatch_log_group_names = [
-      "aws-cloudtrail-logs-example",
-      "second-log-group-example",
-    ]
+    cloudwatch_log_groups = {
+      cloudtrail = "aws-cloudtrail-logs-example"
+      second     = "second-log-group-example"
+    }
   }
 
   assert {
@@ -47,12 +47,17 @@ run "one_filter_per_log_group" {
   }
 
   assert {
-    condition     = aws_cloudwatch_log_subscription_filter.fencer["aws-cloudtrail-logs-example"].filter_pattern == ""
+    condition     = aws_cloudwatch_log_subscription_filter.fencer["cloudtrail"].filter_pattern == ""
     error_message = "The default filter pattern must be empty (all events)."
   }
 
   assert {
-    condition     = aws_cloudwatch_log_subscription_filter.fencer["aws-cloudtrail-logs-example"].name == "fencer-siem"
+    condition     = aws_cloudwatch_log_subscription_filter.fencer["cloudtrail"].log_group_name == "aws-cloudtrail-logs-example"
+    error_message = "The map value must be the log group name."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_subscription_filter.fencer["cloudtrail"].name == "fencer-siem"
     error_message = "The filter name must use name_prefix."
   }
 }
