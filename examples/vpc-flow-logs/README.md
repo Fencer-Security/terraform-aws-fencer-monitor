@@ -35,7 +35,7 @@ aws ec2 describe-vpcs --query 'Vpcs[].VpcId'
 ```sh
 export TF_VAR_fencer_endpoint_url="https://..."       # from the Fencer app
 export TF_VAR_fencer_access_key="..."                 # from the Fencer app
-export TF_VAR_vpc_ids='["vpc-0123456789abcdef0"]'
+export TF_VAR_vpcs='{"main":"vpc-0123456789abcdef0"}'
 export TF_VAR_flow_log_version=10                    # optional: 2, 3, 4, 5, 7, 8, 9, 10 or 11, see formats.tf
 # Version 11 only: the tag keys to publish, by resource type.
 # export TF_VAR_tag_field_specifications='[{"resource_type":"instance","tag_keys":["Name"]}]'
