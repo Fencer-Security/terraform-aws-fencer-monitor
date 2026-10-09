@@ -45,6 +45,7 @@ variable "load_balancer_arns" {
 #   logs:DescribeDeliverySources, logs:DescribeDeliveryDestinations, logs:DescribeDeliveries
 #   firehose:TagDeliveryStream
 #   iam:CreateServiceLinkedRole                      first log delivery to Firehose in the account
+#   elasticloadbalancing:AllowVendedLogDeliveryForResource   on the load balancers
 module "fencer_monitor" {
   source = "../../"
 

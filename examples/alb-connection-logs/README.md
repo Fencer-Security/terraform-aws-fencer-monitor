@@ -24,6 +24,7 @@ Check that the principal that runs Terraform has these IAM permissions:
 - `logs:DescribeDeliverySources`, `logs:DescribeDeliveryDestinations`, `logs:DescribeDeliveries`
 - `firehose:TagDeliveryStream`
 - `iam:CreateServiceLinkedRole` (the first log delivery to Firehose in the account creates `AWSServiceRoleForLogDelivery`)
+- `elasticloadbalancing:AllowVendedLogDeliveryForResource` on the load balancers (AWS defines it for vended log delivery from a load balancer)
 
 Find the load balancer ARNs:
 

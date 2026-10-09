@@ -233,8 +233,21 @@ The principal that runs Terraform needs the CloudWatch Logs delivery
 permissions (`logs:PutDeliverySource`, `logs:PutDeliveryDestination`,
 `logs:CreateDelivery`, their `Get`, `Describe`, `Delete` and
 `logs:UpdateDeliveryConfiguration` counterparts), `firehose:TagDeliveryStream`,
-and `iam:CreateServiceLinkedRole` for the first log delivery to Firehose in the
-account. The module needs provider `hashicorp/aws` 6.56.0 or newer.
+`iam:CreateServiceLinkedRole` for the first log delivery to Firehose in the
+account, and `elasticloadbalancing:AllowVendedLogDeliveryForResource` on the
+load balancers. AWS defines that last action for vended log delivery from a
+load balancer; grant it, or the delivery source creation can fail with an
+access error. The module needs provider `hashicorp/aws` 6.56.0 or newer.
+
+AWS allows one vended log delivery source per load balancer and log type. A
+load balancer that already sends the same log type somewhere through a log
+delivery cannot send it to Fencer as well.
+
+If you created the delivery with the AWS CLI commands from the Fencer app
+before this module version, delete that delivery first
+(`aws logs delete-delivery --id <id>`). The module adopts a delivery source
+and a delivery destination with the same names, but `CreateDelivery` for a
+source and destination that already have a delivery fails.
 
 See [`examples/alb-access-logs`](./examples/alb-access-logs) and
 [`examples/alb-connection-logs`](./examples/alb-connection-logs).
