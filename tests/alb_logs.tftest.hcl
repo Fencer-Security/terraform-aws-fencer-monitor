@@ -5,6 +5,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_data "aws_region" {
+    defaults = {
+      region = "us-east-1"
+    }
+  }
+
   # The Firehose resource validates ARN syntax on apply, so the mock apply run
   # needs well-formed ARNs instead of random strings.
   mock_resource "aws_s3_bucket" {
@@ -236,6 +242,20 @@ run "rejects_a_network_load_balancer_arn" {
   }
 
   expect_failures = [var.alb_load_balancers]
+}
+
+run "rejects_a_load_balancer_in_another_account_or_region" {
+  command = plan
+
+  variables {
+    alb_log_type = "ALB_ACCESS_LOGS"
+    alb_load_balancers = {
+      other-account = "arn:aws:elasticloadbalancing:us-east-1:222222222222:loadbalancer/app/web-prod/50dc6c495c0c9188"
+      other-region  = "arn:aws:elasticloadbalancing:eu-west-1:111111111111:loadbalancer/app/web-prod/50dc6c495c0c9188"
+    }
+  }
+
+  expect_failures = [aws_cloudwatch_log_delivery_source.alb]
 }
 
 run "rejects_a_delivery_source_name_over_60_characters" {

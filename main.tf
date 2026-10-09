@@ -1,4 +1,5 @@
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 resource "aws_cloudwatch_log_group" "firehose" {
   name              = "/aws/kinesisfirehose/${var.name_prefix}"
@@ -252,6 +253,12 @@ resource "aws_cloudwatch_log_delivery_source" "alb" {
     precondition {
       condition     = length("${var.name_prefix}-${each.key}") <= 60
       error_message = "The delivery source name <name_prefix>-<key> must be at most 60 characters. Use a shorter name_prefix or a shorter alb_load_balancers key."
+    }
+    # A delivery source and its load balancer live in one account and region. Checked at plan
+    # time, so the message names the load balancer instead of an AWS error at apply time.
+    precondition {
+      condition     = can(regex("^arn:aws[a-z-]*:elasticloadbalancing:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:", each.value))
+      error_message = "The load balancer ${each.key} is in another account or region than the stream (${data.aws_region.current.region}, ${data.aws_caller_identity.current.account_id}). Deploy the module in the account and region of the load balancers."
     }
   }
 }

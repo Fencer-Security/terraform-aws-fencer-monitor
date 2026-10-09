@@ -205,7 +205,8 @@ through a CloudWatch log delivery (vended logs), straight to the Firehose
 stream, as JSON. Pass the log type and the load balancers as a map of a key of
 your choice to the load balancer ARN. The key names the delivery source
 (`<name_prefix>-<key>`) and is its Terraform instance key, so a load balancer
-created in the same apply works:
+created in the same apply works. The plan refuses a load balancer from another
+account or region:
 
 ```hcl
 module "fencer_alb_access_logs" {
