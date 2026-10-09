@@ -259,6 +259,18 @@ See [`examples/alb-access-logs`](./examples/alb-access-logs) and
 [`examples/alb-logs`](./examples/alb-logs) for both log types in one
 configuration.
 
+### Breaking changes in 1.3
+
+`cloudwatch_log_group_names` and `vpc_flow_log_vpc_ids` are gone. Pass
+`cloudwatch_log_groups` and `vpc_flow_logs`, maps of a key of your choice to
+the log group name or the VPC ID. The key is the Terraform instance key. In
+1.2 the instance key was the value itself, so keep the value as the key to
+upgrade without a replacement, for example
+`cloudwatch_log_groups = { "aws-cloudtrail-logs-example" = "aws-cloudtrail-logs-example" }`.
+A new key such as `cloudtrail` destroys and recreates the subscription filter
+or the flow log, and events in that gap never reach Fencer. `flow_log_ids` is
+keyed by the map key.
+
 ### What gets created
 
 - An Amazon Data Firehose delivery stream with an HTTP endpoint destination:
