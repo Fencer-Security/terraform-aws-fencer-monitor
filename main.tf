@@ -93,12 +93,13 @@ resource "aws_iam_role_policy" "firehose" {
 
 locals {
   alb_logs_enabled = length(var.alb_load_balancers) > 0 && var.alb_log_type != null
+  nlb_logs_enabled = length(var.nlb_load_balancers) > 0
   # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
   # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log or a log delivery, and
   # Terraform removes a tag that is not in the configuration on the next apply. Keep it while the
-  # module creates flow logs or ALB log deliveries, so a stream that only CloudTrail uses does not
-  # get it.
-  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
+  # module creates flow logs or ALB or NLB log deliveries, so a stream that only CloudTrail uses
+  # does not get it.
+  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled || local.nlb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
 }
 
 resource "aws_kinesis_firehose_delivery_stream" "fencer" {
@@ -148,8 +149,8 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
     # One instance sends data to one Fencer data source of one type. Records of a second type in
     # the same stream fail the transformation of the first.
     precondition {
-      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) <= 1
-      error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs and alb_load_balancers. One module instance sends data to one Fencer data source."
+      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) + (length(var.nlb_load_balancers) > 0 ? 1 : 0) <= 1
+      error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs, alb_load_balancers and nlb_load_balancers. One module instance sends data to one Fencer data source."
     }
   }
 }
@@ -270,4 +271,39 @@ resource "aws_cloudwatch_log_delivery" "alb" {
       aws_cloudwatch_log_delivery_source.alb[each.key].resource_arn,
     ]
   }
+}
+
+resource "aws_cloudwatch_log_delivery_destination" "nlb" {
+  count         = local.nlb_logs_enabled ? 1 : 0
+  name          = var.name_prefix
+  output_format = "json"
+  tags          = var.tags
+
+  delivery_destination_configuration {
+    destination_resource_arn = aws_kinesis_firehose_delivery_stream.fencer.arn
+  }
+}
+
+resource "aws_cloudwatch_log_delivery_source" "nlb" {
+  for_each     = var.nlb_load_balancers
+  name         = "${var.name_prefix}-${each.key}"
+  log_type     = "NLB_ACCESS_LOGS"
+  resource_arn = each.value
+  tags         = var.tags
+
+  lifecycle {
+    precondition {
+      condition     = length("${var.name_prefix}-${each.key}") <= 60
+      error_message = "The delivery source name <name_prefix>-<key> must be at most 60 characters. Use a shorter name_prefix or a shorter nlb_load_balancers key."
+    }
+  }
+}
+
+# The log type of an NLB delivery source never changes, so the delivery needs no replace
+# trigger (the ALB delivery has one because alb_log_type can change).
+resource "aws_cloudwatch_log_delivery" "nlb" {
+  for_each                 = aws_cloudwatch_log_delivery_source.nlb
+  delivery_source_name     = each.value.name
+  delivery_destination_arn = aws_cloudwatch_log_delivery_destination.nlb[0].arn
+  tags                     = var.tags
 }
