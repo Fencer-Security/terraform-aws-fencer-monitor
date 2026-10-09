@@ -289,3 +289,18 @@ run "log_type_change_replaces_the_delivery" {
     error_message = "A log type change must replace the delivery."
   }
 }
+
+run "load_balancer_change_replaces_the_delivery" {
+  command = apply
+
+  variables {
+    alb_log_type       = "ALB_CONNECTION_LOGS"
+    alb_load_balancers = { web = var.alb_b }
+    tags               = { team = "b" }
+  }
+
+  assert {
+    condition     = output.alb_log_delivery_ids["web"] != run.log_type_change_replaces_the_delivery.alb_log_delivery_ids["web"]
+    error_message = "A load balancer ARN change must replace the delivery."
+  }
+}
