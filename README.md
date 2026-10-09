@@ -222,8 +222,8 @@ one delivery source plus one delivery per load balancer. One module instance
 delivers one log type to one Fencer data source. For connection logs, create a
 second Fencer data source of type AWS ALB Connection Logs and a second
 instance with `alb_log_type = "ALB_CONNECTION_LOGS"` and another
-`name_prefix`. Do not send both log types through one instance: Fencer does
-not reject a record of the other type, it lands with few mapped fields.
+`name_prefix`. Do not send both log types through one instance: Fencer
+rejects a record of the other type and records an ingestion error.
 
 The delivery writes only to a stream with the tag `LogDeliveryEnabled = true`.
 The module adds that tag to the stream when `alb_load_balancer_arns` is set,
