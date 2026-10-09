@@ -30,6 +30,17 @@ variable "cloudwatch_log_groups" {
   }
 }
 
+variable "cloudwatch_log_group_names" {
+  type        = list(string)
+  description = "Deprecated: use cloudwatch_log_groups. Kept so a 1.2 configuration plans no changes: each name becomes the map key, the instance key that toset() made in 1.2. Do not list a log group here and in cloudwatch_log_groups."
+  default     = []
+
+  validation {
+    condition     = alltrue([for name in var.cloudwatch_log_group_names : length(name) > 0]) && length(var.cloudwatch_log_group_names) == length(distinct(var.cloudwatch_log_group_names))
+    error_message = "cloudwatch_log_group_names entries must be non-empty and unique."
+  }
+}
+
 variable "name_prefix" {
   type        = string
   description = "Prefix for all resource names. Required: each module instance in an AWS account needs a different prefix (for example fencer-cloudtrail, fencer-flowlogs), or the IAM role, the stream and the log group collide."
@@ -82,6 +93,17 @@ variable "vpc_flow_logs" {
   validation {
     condition     = alltrue([for id in values(var.vpc_flow_logs) : length(id) > 0]) && length(values(var.vpc_flow_logs)) == length(distinct(values(var.vpc_flow_logs)))
     error_message = "vpc_flow_logs values must be non-empty and unique VPC IDs."
+  }
+}
+
+variable "vpc_flow_log_vpc_ids" {
+  type        = list(string)
+  description = "Deprecated: use vpc_flow_logs. Kept so a 1.2 configuration plans no changes: each VPC ID becomes the map key, the instance key that toset() made in 1.2. Do not list a VPC here and in vpc_flow_logs."
+  default     = []
+
+  validation {
+    condition     = alltrue([for id in var.vpc_flow_log_vpc_ids : length(id) > 0]) && length(var.vpc_flow_log_vpc_ids) == length(distinct(var.vpc_flow_log_vpc_ids))
+    error_message = "vpc_flow_log_vpc_ids entries must be non-empty and unique."
   }
 }
 

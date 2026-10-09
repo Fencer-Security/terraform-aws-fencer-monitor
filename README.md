@@ -258,6 +258,17 @@ See [`examples/alb-access-logs`](./examples/alb-access-logs) and
 [`examples/alb-logs`](./examples/alb-logs) for both log types in one
 configuration.
 
+### Upgrading from 1.2
+
+Version 1.3 takes the log groups and the VPCs as maps (`cloudwatch_log_groups`,
+`vpc_flow_logs`). The 1.2 list inputs still work: each value becomes its own
+key, which is the instance key 1.2 used, so an upgraded configuration plans no
+changes. To move to the map form without a replacement, keep the value as the
+key, for example `cloudwatch_log_groups = { "aws-cloudtrail-logs-example" = "aws-cloudtrail-logs-example" }`.
+A new key such as `cloudtrail` destroys and recreates the subscription filter
+or the flow log, and events in that gap never reach Fencer. Do not set a
+resource in both the list and the map.
+
 ### What gets created
 
 - An Amazon Data Firehose delivery stream with an HTTP endpoint destination:
@@ -335,8 +346,10 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `fencer_endpoint_url` | `string` | — | Fencer Firehose HTTP endpoint URL (from the Fencer app). |
 | `fencer_access_key` | `string` | — | Fencer access token (from the Fencer app). Sensitive. |
 | `cloudwatch_log_groups` | `map(string)` | `{}` | Log groups to subscribe to the stream: a key of your choice to the log group name. Unique, non-empty names. |
+| `cloudwatch_log_group_names` | `list(string)` | `[]` | Deprecated, use `cloudwatch_log_groups`. Each name becomes its own key, so a 1.2 configuration plans no changes. |
 | `name_prefix` | `string` | required | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. Each module instance in an AWS account needs a different one. |
 | `vpc_flow_logs` | `map(string)` | `{}` | VPCs to publish flow logs from: a key of your choice to the VPC ID. One flow log per VPC. Unique, non-empty IDs. |
+| `vpc_flow_log_vpc_ids` | `list(string)` | `[]` | Deprecated, use `vpc_flow_logs`. Each VPC ID becomes its own key, so a 1.2 configuration plans no changes. |
 | `vpc_flow_log_format` | `string` | AWS version 10 field set (42 fields) | Flow log format. Fencer accepts the full field set of any version (2 to 11). Any other field set needs a custom Fencer transformation. |
 | `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |
 | `vpc_flow_log_max_aggregation_interval` | `number` | `60` | Seconds AWS aggregates records before it publishes them: `60` or `600`. |

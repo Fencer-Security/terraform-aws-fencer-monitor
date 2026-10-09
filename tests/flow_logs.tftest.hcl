@@ -85,6 +85,32 @@ run "one_flow_log_per_vpc" {
   }
 }
 
+# A 1.2 configuration passes a list. The VPC ID is the instance key, as toset() made it, so the
+# upgrade replaces no flow log.
+run "deprecated_list_keeps_the_vpc_id_as_the_key" {
+  command = plan
+
+  variables {
+    vpc_flow_log_vpc_ids = ["vpc-0aaa1111"]
+  }
+
+  assert {
+    condition     = aws_flow_log.fencer["vpc-0aaa1111"].vpc_id == "vpc-0aaa1111" && aws_kinesis_firehose_delivery_stream.fencer.tags["LogDeliveryEnabled"] == "true"
+    error_message = "The deprecated list must create the flow log under the VPC ID and keep the stream tag."
+  }
+}
+
+run "rejects_a_vpc_in_the_list_and_the_map" {
+  command = plan
+
+  variables {
+    vpc_flow_log_vpc_ids = ["vpc-0aaa1111"]
+    vpc_flow_logs        = { main = "vpc-0aaa1111" }
+  }
+
+  expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
+}
+
 run "flow_logs_use_module_tags" {
   command = plan
 
