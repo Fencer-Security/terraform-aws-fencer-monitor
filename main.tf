@@ -240,6 +240,11 @@ resource "aws_cloudwatch_log_delivery_source" "alb" {
   resource_arn = each.value
   tags         = var.tags
 
+  # PutDeliverySource overwrites a delivery source of the same name. Create the stream first, so a
+  # second instance with the same name_prefix fails on the stream name before it can overwrite the
+  # delivery sources of the first instance.
+  depends_on = [aws_kinesis_firehose_delivery_stream.fencer]
+
   lifecycle {
     precondition {
       condition     = length("${var.name_prefix}-${each.key}") <= 60
@@ -291,6 +296,9 @@ resource "aws_cloudwatch_log_delivery_source" "nlb" {
   resource_arn = each.value
   tags         = var.tags
 
+  # See the ALB delivery source.
+  depends_on = [aws_kinesis_firehose_delivery_stream.fencer]
+
   lifecycle {
     precondition {
       condition     = length("${var.name_prefix}-${each.key}") <= 60
@@ -299,11 +307,15 @@ resource "aws_cloudwatch_log_delivery_source" "nlb" {
   }
 }
 
-# The log type of an NLB delivery source never changes, so the delivery needs no replace
-# trigger (the ALB delivery has one because alb_log_type can change).
 resource "aws_cloudwatch_log_delivery" "nlb" {
   for_each                 = aws_cloudwatch_log_delivery_source.nlb
   delivery_source_name     = each.value.name
   delivery_destination_arn = aws_cloudwatch_log_delivery_destination.nlb[0].arn
   tags                     = var.tags
+
+  # A load balancer ARN change replaces the delivery source, and AWS does not delete a delivery
+  # source while a delivery uses it. Replace the delivery first. The log type never changes.
+  lifecycle {
+    replace_triggered_by = [aws_cloudwatch_log_delivery_source.nlb[each.key].resource_arn]
+  }
 }

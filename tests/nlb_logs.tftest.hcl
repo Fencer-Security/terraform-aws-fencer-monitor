@@ -211,3 +211,40 @@ run "rejects_a_delivery_source_name_over_60_characters" {
 
   expect_failures = [aws_cloudwatch_log_delivery_source.nlb]
 }
+
+run "deliveries_exist" {
+  command = apply
+
+  variables {
+    nlb_load_balancers = { web = var.nlb_a }
+    tags               = { team = "a" }
+  }
+}
+
+run "tag_change_keeps_the_delivery" {
+  command = apply
+
+  variables {
+    nlb_load_balancers = { web = var.nlb_a }
+    tags               = { team = "b" }
+  }
+
+  assert {
+    condition     = output.nlb_log_delivery_ids["web"] == run.deliveries_exist.nlb_log_delivery_ids["web"]
+    error_message = "A tag change must not replace the delivery."
+  }
+}
+
+run "load_balancer_arn_change_replaces_the_delivery" {
+  command = apply
+
+  variables {
+    nlb_load_balancers = { web = var.nlb_b }
+    tags               = { team = "b" }
+  }
+
+  assert {
+    condition     = output.nlb_log_delivery_ids["web"] != run.tag_change_keeps_the_delivery.nlb_log_delivery_ids["web"]
+    error_message = "A load balancer ARN change must replace the delivery, or AWS refuses to delete the delivery source."
+  }
+}

@@ -405,8 +405,8 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |
 | `vpc_flow_log_max_aggregation_interval` | `number` | `60` | Seconds AWS aggregates records before it publishes them: `60` or `600`. |
 | `alb_log_type` | `string` | `null` | `ALB_ACCESS_LOGS` or `ALB_CONNECTION_LOGS`. Required when `alb_load_balancers` is set. One instance delivers one log type. A change replaces every delivery source and delivery. |
-| `alb_load_balancers` | `map(string)` | `{}` | Application Load Balancers to deliver logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. |
-| `nlb_load_balancers` | `map(string)` | `{}` | Network Load Balancers to deliver access logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. Entries only for TLS listeners. |
+| `alb_load_balancers` | `map(string)` | `{}` | Application Load Balancers to deliver logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. |
+| `nlb_load_balancers` | `map(string)` | `{}` | Network Load Balancers to deliver access logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. Entries only for TLS listeners. |
 | `subscription_filter_pattern` | `string` | `""` | Filter pattern. Empty sends all events. |
 | `backup_expiration_days` | `number` | `30` | Expiry for failed-delivery objects. |
 | `error_log_retention_days` | `number` | `7` | Retention of the error log group. |
