@@ -237,3 +237,43 @@ run "rejects_a_delivery_source_name_over_60_characters" {
 
   expect_failures = [aws_cloudwatch_log_delivery_source.alb]
 }
+
+run "deliveries_exist" {
+  command = apply
+
+  variables {
+    alb_log_type           = "ALB_ACCESS_LOGS"
+    alb_load_balancer_arns = [var.alb_a]
+    tags                   = { team = "a" }
+  }
+}
+
+run "tag_change_keeps_the_delivery" {
+  command = apply
+
+  variables {
+    alb_log_type           = "ALB_ACCESS_LOGS"
+    alb_load_balancer_arns = [var.alb_a]
+    tags                   = { team = "b" }
+  }
+
+  assert {
+    condition     = output.alb_log_delivery_ids[var.alb_a] == run.deliveries_exist.alb_log_delivery_ids[var.alb_a]
+    error_message = "A tag change must not replace the delivery."
+  }
+}
+
+run "log_type_change_replaces_the_delivery" {
+  command = apply
+
+  variables {
+    alb_log_type           = "ALB_CONNECTION_LOGS"
+    alb_load_balancer_arns = [var.alb_a]
+    tags                   = { team = "b" }
+  }
+
+  assert {
+    condition     = output.alb_log_delivery_ids[var.alb_a] != run.tag_change_keeps_the_delivery.alb_log_delivery_ids[var.alb_a]
+    error_message = "A log type change must replace the delivery."
+  }
+}

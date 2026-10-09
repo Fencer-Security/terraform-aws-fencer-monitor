@@ -255,9 +255,10 @@ resource "aws_cloudwatch_log_delivery" "alb" {
   tags                     = var.tags
 
   # A log type change replaces the delivery source, and AWS does not delete a delivery source
-  # while a delivery uses it. Replace the delivery with its source, so Terraform deletes the
-  # delivery first.
+  # while a delivery uses it. Replace the delivery when the log type changes, so Terraform deletes
+  # the delivery first. Reference log_type, not the whole source: a reference to the source also
+  # replaces the delivery on an in-place update, for example a tags change.
   lifecycle {
-    replace_triggered_by = [aws_cloudwatch_log_delivery_source.alb[each.key]]
+    replace_triggered_by = [aws_cloudwatch_log_delivery_source.alb[each.key].log_type]
   }
 }
