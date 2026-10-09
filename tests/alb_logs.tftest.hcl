@@ -182,7 +182,8 @@ run "rejects_load_balancers_and_log_groups_together" {
   expect_failures = [aws_kinesis_firehose_delivery_stream.fencer]
 }
 
-run "rejects_unknown_log_type" {
+# ALB_HEALTH_CHECK_LOGS is a valid AWS log type that Fencer does not ingest.
+run "rejects_health_check_logs" {
   command = plan
 
   variables {

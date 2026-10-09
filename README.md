@@ -268,6 +268,7 @@ The AWS delivery mechanism decides the setup:
 | VPC flow logs | This module. Pass the VPC IDs. |
 | RDS PostgreSQL logs, Route 53 resolver query logs | Not supported yet. |
 | ALB access logs, ALB connection logs | This module. Pass the log type and the load balancer ARNs. One instance per log type. |
+| ALB health check logs | Not supported. Fencer has no data source type for them. |
 | NLB access logs, S3 access logs | Not supported by this module yet. Use the batch setup in the Fencer app. |
 
 ### Examples
