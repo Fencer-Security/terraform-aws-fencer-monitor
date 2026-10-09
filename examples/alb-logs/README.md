@@ -83,9 +83,13 @@ terraform destroy
 ```
 
 This removes the log deliveries and the Fencer resources only. If a backup
-bucket holds objects, empty it first:
+bucket holds objects, empty it first. The bucket is versioned, so
+delete every object version and delete marker, or `terraform destroy` fails
+with `BucketNotEmpty`:
 
 ```sh
-aws s3 rm "s3://$(terraform output -raw access_logs_backup_bucket)" --recursive
-aws s3 rm "s3://$(terraform output -raw connection_logs_backup_bucket)" --recursive
+for B in "$(terraform output -raw access_logs_backup_bucket)" "$(terraform output -raw connection_logs_backup_bucket)"; do
+  aws s3api delete-objects --bucket "$B" --delete "$(aws s3api list-object-versions --bucket "$B" --output json \
+    --query '{Objects: [Versions[].{Key:Key,VersionId:VersionId}, DeleteMarkers[].{Key:Key,VersionId:VersionId}][]}')"
+done
 ```
