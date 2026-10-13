@@ -92,22 +92,22 @@ run "rejects_duplicate_log_group_names" {
   command = plan
 
   variables {
-    fencer_endpoint_url        = "https://ingest.fencer.dev/v1/firehose/test"
-    fencer_access_key          = "test-token"
-    cloudwatch_log_group_names = ["dup", "dup"]
+    fencer_endpoint_url   = "https://ingest.fencer.dev/v1/firehose/test"
+    fencer_access_key     = "test-token"
+    cloudwatch_log_groups = { a = "dup", b = "dup" }
   }
 
-  expect_failures = [var.cloudwatch_log_group_names]
+  expect_failures = [var.cloudwatch_log_groups]
 }
 
 run "rejects_empty_log_group_name" {
   command = plan
 
   variables {
-    fencer_endpoint_url        = "https://ingest.fencer.dev/v1/firehose/test"
-    fencer_access_key          = "test-token"
-    cloudwatch_log_group_names = [""]
+    fencer_endpoint_url   = "https://ingest.fencer.dev/v1/firehose/test"
+    fencer_access_key     = "test-token"
+    cloudwatch_log_groups = { a = "" }
   }
 
-  expect_failures = [var.cloudwatch_log_group_names]
+  expect_failures = [var.cloudwatch_log_groups]
 }

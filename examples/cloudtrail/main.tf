@@ -49,8 +49,8 @@ module "fencer_monitor" {
   fencer_access_key   = var.fencer_access_key
 
   # Each module instance in an AWS account must have a different name_prefix.
-  name_prefix                = "fencer-cloudtrail"
-  cloudwatch_log_group_names = [data.aws_cloudwatch_log_group.cloudtrail.name]
+  name_prefix           = "fencer-cloudtrail"
+  cloudwatch_log_groups = { cloudtrail = data.aws_cloudwatch_log_group.cloudtrail.name }
 }
 
 output "firehose_delivery_stream_arn" {

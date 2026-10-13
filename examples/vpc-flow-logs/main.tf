@@ -28,9 +28,9 @@ variable "fencer_access_key" {
   sensitive   = true
 }
 
-variable "vpc_ids" {
-  description = "IDs of the VPCs to publish flow logs from."
-  type        = list(string)
+variable "vpcs" {
+  description = "VPCs to publish flow logs from: a key of your choice to the VPC ID. The key is the flow log's Terraform instance key."
+  type        = map(string)
 }
 
 variable "flow_log_version" {
@@ -69,8 +69,8 @@ module "fencer_monitor" {
 
   # Each module instance in an AWS account must have a different name_prefix. The IAM role, the
   # stream and the log group take their names from it, and the CloudTrail example uses the default.
-  name_prefix          = "fencer-flowlogs"
-  vpc_flow_log_vpc_ids = var.vpc_ids
+  name_prefix   = "fencer-flowlogs"
+  vpc_flow_logs = var.vpcs
 
   # Log format. Fencer reads the fields by position and accepts the full field set of one flow log
   # version, in the AWS order. The module default is the version 10 set (42 fields). formats.tf
@@ -108,7 +108,7 @@ output "firehose_delivery_stream_name" {
 }
 
 output "flow_log_ids" {
-  description = "Map of VPC ID to flow log ID."
+  description = "Map of vpcs key to flow log ID."
   value       = module.fencer_monitor.flow_log_ids
 }
 
