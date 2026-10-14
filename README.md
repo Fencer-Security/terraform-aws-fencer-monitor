@@ -259,6 +259,53 @@ See [`examples/alb-access-logs`](./examples/alb-access-logs) and
 [`examples/alb-logs`](./examples/alb-logs) for both log types in one
 configuration.
 
+### Connect NLB access logs
+
+Deploy the module in the same AWS account and region as the load balancers.
+A Network Load Balancer delivers its access logs through a CloudWatch log
+delivery (vended logs), straight to the Firehose stream, as JSON. Pass the
+load balancers as a map of a key of your choice to the load balancer ARN. The
+key names the delivery source (`<name_prefix>-<key>`) and is its Terraform
+instance key, so a load balancer created in the same apply works:
+
+```hcl
+module "fencer_nlb_access_logs" {
+  source  = "Fencer-Security/fencer-monitor/aws"
+  version = "~> 1.4"
+
+  fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+  fencer_access_key   = var.fencer_nlb_access_logs_access_key
+  name_prefix         = "fencer-nlb-access-logs"
+
+  nlb_load_balancers = { my-nlb = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/50dc6c495c0c9188" }
+}
+```
+
+The module creates one delivery destination that points at the stream, and
+one delivery source plus one delivery per load balancer. One module instance
+sends data to one Fencer data source, of type AWS NLB Access Logs. A Network
+Load Balancer writes access log entries only for TLS listeners.
+
+The delivery writes only to a stream with the tag `LogDeliveryEnabled = true`.
+The module adds that tag to the stream when `nlb_load_balancers` is set,
+so Terraform never removes it.
+
+The principal that runs Terraform needs the same permissions as for ALB logs,
+including `elasticloadbalancing:AllowVendedLogDeliveryForResource` on the
+load balancers. The module needs provider `hashicorp/aws` 6.56.0 or newer.
+
+AWS allows one vended log delivery source per load balancer and log type. A
+load balancer that already sends access logs somewhere through a log delivery
+cannot send them to Fencer as well.
+
+If you created the delivery with the AWS CLI commands from the Fencer app,
+delete that delivery first (`aws logs delete-delivery --id <id>`). The module
+adopts a delivery source and a delivery destination with the same names, but
+`CreateDelivery` for a source and destination that already have a delivery
+fails.
+
+See [`examples/nlb-access-logs`](./examples/nlb-access-logs).
+
 ### Breaking changes in 1.3
 
 `cloudwatch_log_group_names` and `vpc_flow_log_vpc_ids` are gone. Pass
@@ -289,6 +336,8 @@ keyed by the map key.
 - When `alb_load_balancers` is set: one CloudWatch log delivery
   destination (the stream, JSON output), one delivery source and one delivery
   per load balancer, and the `LogDeliveryEnabled = true` tag on the stream.
+- When `nlb_load_balancers` is set: the same set of resources as for
+  `alb_load_balancers`, with the log type `NLB_ACCESS_LOGS`.
 
 ### Other data source types
 
@@ -301,7 +350,8 @@ The AWS delivery mechanism decides the setup:
 | RDS PostgreSQL logs, Route 53 resolver query logs | Not supported yet. |
 | ALB access logs, ALB connection logs | This module. Pass the log type and the load balancers. One instance per log type. |
 | ALB health check logs | Not supported. Fencer has no data source type for them. |
-| NLB access logs, S3 access logs | Not supported by this module yet. Use the batch setup in the Fencer app. |
+| NLB access logs | This module. Pass the load balancer ARNs. |
+| S3 access logs | Not supported by this module yet. Use the batch setup in the Fencer app. |
 
 ### Examples
 
@@ -316,6 +366,7 @@ apply, verify, clean up):
 | [`examples/alb-access-logs`](./examples/alb-access-logs) | ALB access logs through a CloudWatch log delivery to the stream. |
 | [`examples/alb-connection-logs`](./examples/alb-connection-logs) | ALB connection logs through a CloudWatch log delivery to the stream. |
 | [`examples/alb-logs`](./examples/alb-logs) | Both ALB log types from one configuration: two instances, two Fencer data sources. |
+| [`examples/nlb-access-logs`](./examples/nlb-access-logs) | NLB access logs through a CloudWatch log delivery to the stream. |
 
 ### Verify
 
@@ -354,7 +405,8 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `vpc_flow_log_traffic_type` | `string` | `"ALL"` | Traffic to log: `ACCEPT`, `REJECT`, or `ALL`. |
 | `vpc_flow_log_max_aggregation_interval` | `number` | `60` | Seconds AWS aggregates records before it publishes them: `60` or `600`. |
 | `alb_log_type` | `string` | `null` | `ALB_ACCESS_LOGS` or `ALB_CONNECTION_LOGS`. Required when `alb_load_balancers` is set. One instance delivers one log type. A change replaces every delivery source and delivery. |
-| `alb_load_balancers` | `map(string)` | `{}` | Application Load Balancers to deliver logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. |
+| `alb_load_balancers` | `map(string)` | `{}` | Application Load Balancers to deliver logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. |
+| `nlb_load_balancers` | `map(string)` | `{}` | Network Load Balancers to deliver access logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. Entries only for TLS listeners. |
 | `subscription_filter_pattern` | `string` | `""` | Filter pattern. Empty sends all events. |
 | `backup_expiration_days` | `number` | `30` | Expiry for failed-delivery objects. |
 | `error_log_retention_days` | `number` | `7` | Retention of the error log group. |
@@ -373,6 +425,8 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `flow_log_ids` | Map of `vpc_flow_logs` key to flow log ID. Empty when no VPCs. |
 | `alb_log_delivery_destination_arn` | Log delivery destination ARN, `null` when no load balancers. |
 | `alb_log_delivery_ids` | Map of `alb_load_balancers` key to log delivery ID. Empty when no load balancers. |
+| `nlb_log_delivery_destination_arn` | Log delivery destination ARN, `null` when no load balancers. |
+| `nlb_log_delivery_ids` | Map of `nlb_load_balancers` key to log delivery ID. Empty when no load balancers. |
 
 ### License
 

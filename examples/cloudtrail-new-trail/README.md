@@ -45,8 +45,12 @@ terraform destroy
 ```
 
 The trail's S3 bucket and the backup bucket must be empty before destroy
-succeeds:
+succeeds. The bucket is versioned, so delete every object version and delete
+marker:
 
 ```sh
-aws s3 rm "s3://$(terraform output -raw backup_bucket)" --recursive
+for B in "$(terraform output -raw backup_bucket)"; do
+  aws s3api delete-objects --bucket "$B" --delete "$(aws s3api list-object-versions --bucket "$B" --output json \
+    --query '{Objects: [Versions[].{Key:Key,VersionId:VersionId}, DeleteMarkers[].{Key:Key,VersionId:VersionId}][]}')"
+done
 ```

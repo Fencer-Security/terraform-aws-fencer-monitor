@@ -161,3 +161,19 @@ variable "alb_load_balancers" {
     error_message = "alb_load_balancers values must be unique Application Load Balancer ARNs (arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/app/<name>/<id>)."
   }
 }
+
+variable "nlb_load_balancers" {
+  type        = map(string)
+  description = "Network Load Balancers whose access logs (log type NLB_ACCESS_LOGS) the module delivers to the Firehose stream as JSON, as a map of a key of your choice to the load balancer ARN. The key names the delivery source (<name_prefix>-<key>) and is the Terraform instance key, so a load balancer created in the same apply works. The module creates one CloudWatch log delivery per load balancer. The load balancers must be in the same account and region as the stream. A Network Load Balancer writes access log entries only for TLS listeners. Leave empty to create no log delivery."
+  default     = {}
+
+  validation {
+    condition     = alltrue([for key in keys(var.nlb_load_balancers) : can(regex("^[a-z0-9][a-z0-9-]*$", key))])
+    error_message = "nlb_load_balancers keys must start with a lowercase letter or digit and match ^[a-z0-9][a-z0-9-]*$; the key names the delivery source."
+  }
+
+  validation {
+    condition     = alltrue([for arn in values(var.nlb_load_balancers) : can(regex("^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:loadbalancer/net/[^/]+/[0-9a-f]+$", arn))]) && length(values(var.nlb_load_balancers)) == length(distinct(values(var.nlb_load_balancers)))
+    error_message = "nlb_load_balancers values must be unique Network Load Balancer ARNs (arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/net/<name>/<id>)."
+  }
+}
