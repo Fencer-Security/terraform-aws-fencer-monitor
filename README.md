@@ -154,7 +154,9 @@ The module creates one flow log per VPC. Use one module instance per Fencer
 data source. Do not send CloudTrail and flow logs through the same instance;
 the module refuses VPCs and log groups together. Each module instance
 in an AWS account must have a different `name_prefix` (the input is required): the IAM role, the
-stream and the log group take their names from it.
+stream and the log group take their names from it. On one log group the collision is silent:
+`PutSubscriptionFilter` creates or updates a filter by name, so a second instance with the same
+`name_prefix` takes over the filter of the first, and the first stream stops receiving events.
 
 The default `vpc_flow_log_format` is the AWS version 10 field set (42 fields).
 Fencer accepts the full field set of one flow log version in AWS table order.
@@ -355,6 +357,75 @@ fails.
 
 See [`examples/s3-access-logs`](./examples/s3-access-logs).
 
+### Connect RDS PostgreSQL logs
+
+Deploy the module in the same AWS account and region as the database. An RDS
+for PostgreSQL instance publishes its PostgreSQL log to a CloudWatch Logs log
+group. The module subscribes that log group to the stream, as for CloudTrail.
+Subscription filters cannot cross accounts.
+
+1. Enable the PostgreSQL log export on the instance. In the RDS console, choose
+   Modify → Log exports → PostgreSQL. With the AWS CLI:
+
+   ```bash
+   aws rds modify-db-instance \
+     --db-instance-identifier my-db \
+     --cloudwatch-logs-export-configuration '{"EnableLogTypes":["postgresql"]}'
+   ```
+
+   With Terraform, add `enabled_cloudwatch_logs_exports = ["postgresql"]` to
+   the `aws_db_instance` resource.
+
+   For an Aurora PostgreSQL cluster, the export is a cluster setting. Run
+   `aws rds modify-db-cluster --db-cluster-identifier <cluster>
+   --cloudwatch-logs-export-configuration '{"EnableLogTypes":["postgresql"]}'`,
+   or set `enabled_cloudwatch_logs_exports = ["postgresql"]` on the
+   `aws_rds_cluster` resource.
+
+2. Pass the log group name. For an instance it is
+   `/aws/rds/instance/<identifier>/postgresql`. For an Aurora PostgreSQL
+   cluster it is `/aws/rds/cluster/<cluster>/postgresql`:
+
+   ```hcl
+   module "fencer_rds_postgres_logs" {
+     source  = "Fencer-Security/fencer-monitor/aws"
+     version = "~> 1.4"
+
+     fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+     fencer_access_key   = var.fencer_rds_postgres_logs_access_key
+     name_prefix         = "fencer-rds-postgres"
+
+     cloudwatch_log_groups = { main = "/aws/rds/instance/my-db/postgresql" }
+   }
+   ```
+
+   Pass one entry per instance to send several instances to the same Fencer
+   data source. The data source has the type AWS RDS PostgreSQL Std Logs.
+
+3. Set the parameters that produce useful lines in the instance's parameter
+   group. `log_connections` and `log_disconnections` write the connection
+   events. `log_statement = ddl` writes schema changes. The `pgaudit` extension
+   writes statements in a structured form. It needs
+   `shared_preload_libraries = pgaudit`, a static parameter that takes effect
+   after a reboot. Set `pgaudit.log`, for example `pgaudit.log = 'ddl, role'`,
+   and run `CREATE EXTENSION pgaudit` in the database. Without both, pgAudit
+   logs nothing. Statement text can contain passwords and other secrets, so
+   check what your statements hold before you enable statement logging.
+
+Only new log lines reach Fencer. RDS does not upload log lines it wrote before
+you enabled the export, and a subscription filter does not send older events.
+
+The log group exists only after the export is active and the instance has
+written its first line. If `terraform apply` fails with
+`ResourceNotFoundException` on the subscription filter, wait a few minutes and
+run it again.
+
+A log group supports at most 5 subscription filters (AWS quota, not
+adjustable). If the log group already feeds other destinations, check
+`aws logs describe-subscription-filters` before you apply.
+
+See [`examples/rds-postgresql-logs`](./examples/rds-postgresql-logs).
+
 ### Breaking changes in 1.3
 
 `cloudwatch_log_group_names` and `vpc_flow_log_vpc_ids` are gone. Pass
@@ -398,7 +469,8 @@ The AWS delivery mechanism decides the setup:
 |---|---|
 | CloudTrail | This module. Pass the trail's log group. |
 | VPC flow logs | This module. Pass the VPCs. |
-| RDS PostgreSQL logs, Route 53 resolver query logs | Not supported yet. |
+| RDS PostgreSQL logs | This module. Pass the instance's log group. |
+| Route 53 resolver query logs | Not supported yet. |
 | ALB access logs, ALB connection logs | This module. Pass the log type and the load balancers. One instance per log type. |
 | ALB health check logs | Not supported. Fencer has no data source type for them. |
 | NLB access logs | This module. Pass the load balancer ARNs. |
@@ -419,6 +491,7 @@ apply, verify, clean up):
 | [`examples/alb-logs`](./examples/alb-logs) | Both ALB log types from one configuration: two instances, two Fencer data sources. |
 | [`examples/nlb-access-logs`](./examples/nlb-access-logs) | NLB access logs through a CloudWatch log delivery to the stream. |
 | [`examples/s3-access-logs`](./examples/s3-access-logs) | S3 server access logs through a CloudWatch log delivery to the stream. |
+| [`examples/rds-postgresql-logs`](./examples/rds-postgresql-logs) | RDS PostgreSQL logs that an instance publishes to CloudWatch Logs. |
 
 ### Verify
 
