@@ -20,7 +20,7 @@ module "fencer_monitor" {
   version = "~> 1.3"
 
   # Copy both values from the AWS Monitor page in the Fencer app.
-  fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+  fencer_endpoint_url = var.fencer_endpoint_url # from the Fencer app, ends in /firehose
   fencer_access_key   = var.fencer_access_key
 
   # The CloudWatch Logs log group your CloudTrail trail delivers into. The key
@@ -141,7 +141,7 @@ module "fencer_monitor" {
   source  = "Fencer-Security/fencer-monitor/aws"
   version = "~> 1.3"
 
-  fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+  fencer_endpoint_url = var.fencer_endpoint_url # from the Fencer app, ends in /firehose
   fencer_access_key   = var.fencer_access_key
 
   # Each module instance in an AWS account must have a different name_prefix.
@@ -213,7 +213,7 @@ module "fencer_alb_access_logs" {
   source  = "Fencer-Security/fencer-monitor/aws"
   version = "~> 1.3"
 
-  fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+  fencer_endpoint_url = var.fencer_endpoint_url # from the Fencer app, ends in /firehose
   fencer_access_key   = var.fencer_alb_access_logs_access_key
   name_prefix         = "fencer-alb-access-logs"
 
@@ -273,7 +273,7 @@ module "fencer_nlb_access_logs" {
   source  = "Fencer-Security/fencer-monitor/aws"
   version = "~> 1.4"
 
-  fencer_endpoint_url = "https://ingest.fencer.dev/v1/firehose/replace-me"
+  fencer_endpoint_url = var.fencer_endpoint_url # from the Fencer app, ends in /firehose
   fencer_access_key   = var.fencer_nlb_access_logs_access_key
   name_prefix         = "fencer-nlb-access-logs"
 
@@ -305,6 +305,55 @@ adopts a delivery source and a delivery destination with the same names, but
 fails.
 
 See [`examples/nlb-access-logs`](./examples/nlb-access-logs).
+
+### Connect S3 server access logs
+
+Deploy the module in the same AWS account and region as the buckets. An S3
+bucket delivers its server access logs through a CloudWatch log delivery
+(vended logs), straight to the Firehose stream, as JSON. Pass the buckets as a
+map of a key of your choice to the bucket ARN. The key names the delivery
+source (`<name_prefix>-<key>`) and is its Terraform instance key, so a bucket
+created in the same apply works:
+
+```hcl
+module "fencer_s3_access_logs" {
+  source  = "Fencer-Security/fencer-monitor/aws"
+  version = "~> 1.5"
+
+  fencer_endpoint_url = var.fencer_endpoint_url # from the Fencer app, ends in /firehose
+  fencer_access_key   = var.fencer_s3_access_logs_access_key
+  name_prefix         = "fencer-s3-access-logs"
+
+  s3_buckets = { my-bucket = "arn:aws:s3:::my-bucket" }
+}
+```
+
+The module creates one delivery destination that points at the stream, and
+one delivery source plus one delivery per bucket. One module instance sends
+data to one Fencer data source, of type AWS S3 Bucket Access Logs. AWS
+supports general purpose buckets only. The only output format is JSON.
+
+AWS takes 15 to 20 minutes to apply the delivery. Delivery then begins within a few hours and includes new requests only.
+
+The delivery writes only to a stream with the tag `LogDeliveryEnabled = true`.
+The module adds that tag to the stream when `s3_buckets` is set, so Terraform
+never removes it.
+
+The principal that runs Terraform needs the same permissions as for ALB logs,
+except that the resource-side permission is `s3:AllowVendedLogDeliveryForResource`
+on the buckets. The module needs provider `hashicorp/aws` 6.56.0 or newer.
+
+AWS allows one vended log delivery source per bucket and log type. A bucket
+that already sends server access logs somewhere through a log delivery cannot
+send them to Fencer as well.
+
+If you created the delivery with the AWS CLI commands from the Fencer app,
+delete that delivery first (`aws logs delete-delivery --id <id>`). The module
+adopts a delivery source and a delivery destination with the same names, but
+`CreateDelivery` for a source and destination that already have a delivery
+fails.
+
+See [`examples/s3-access-logs`](./examples/s3-access-logs).
 
 ### Breaking changes in 1.3
 
@@ -338,6 +387,8 @@ keyed by the map key.
   per load balancer, and the `LogDeliveryEnabled = true` tag on the stream.
 - When `nlb_load_balancers` is set: the same set of resources as for
   `alb_load_balancers`, with the log type `NLB_ACCESS_LOGS`.
+- When `s3_buckets` is set: the same set of resources as for
+  `alb_load_balancers`, with the log type `S3_SERVER_ACCESS_LOGS`.
 
 ### Other data source types
 
@@ -351,7 +402,7 @@ The AWS delivery mechanism decides the setup:
 | ALB access logs, ALB connection logs | This module. Pass the log type and the load balancers. One instance per log type. |
 | ALB health check logs | Not supported. Fencer has no data source type for them. |
 | NLB access logs | This module. Pass the load balancer ARNs. |
-| S3 access logs | Not supported by this module yet. Use the batch setup in the Fencer app. |
+| S3 access logs | This module. Pass the bucket ARNs. |
 
 ### Examples
 
@@ -367,6 +418,7 @@ apply, verify, clean up):
 | [`examples/alb-connection-logs`](./examples/alb-connection-logs) | ALB connection logs through a CloudWatch log delivery to the stream. |
 | [`examples/alb-logs`](./examples/alb-logs) | Both ALB log types from one configuration: two instances, two Fencer data sources. |
 | [`examples/nlb-access-logs`](./examples/nlb-access-logs) | NLB access logs through a CloudWatch log delivery to the stream. |
+| [`examples/s3-access-logs`](./examples/s3-access-logs) | S3 server access logs through a CloudWatch log delivery to the stream. |
 
 ### Verify
 
@@ -386,7 +438,7 @@ pulumi package add terraform-module Fencer-Security/fencer-monitor/aws 1.3.0 fen
 import * as fencermonitor from "@pulumi/fencermonitor";
 
 const monitor = new fencermonitor.Module("fencer-monitor", {
-  fencer_endpoint_url: "https://ingest.fencer.dev/v1/firehose/replace-me",
+  fencer_endpoint_url: config.require("fencerEndpointUrl"), // from the Fencer app, ends in /firehose
   fencer_access_key: config.requireSecret("fencerAccessKey"),
   cloudwatch_log_groups: { cloudtrail: "aws-cloudtrail-logs-example" },
 });
@@ -396,7 +448,7 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `fencer_endpoint_url` | `string` | — | Fencer Firehose HTTP endpoint URL (from the Fencer app). |
+| `fencer_endpoint_url` | `string` | — | Fencer Firehose HTTP endpoint URL, copied from the Fencer app. It ends in `/firehose` and is the same for every data source: the access token identifies the data source. |
 | `fencer_access_key` | `string` | — | Fencer access token (from the Fencer app). Sensitive. |
 | `cloudwatch_log_groups` | `map(string)` | `{}` | Log groups to subscribe to the stream: a key of your choice to the log group name. Unique, non-empty names. |
 | `name_prefix` | `string` | required | Prefix for all resource names. `^[a-z0-9][a-z0-9-]*$`, max 29 chars. Each module instance in an AWS account needs a different one. |
@@ -407,6 +459,7 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `alb_log_type` | `string` | `null` | `ALB_ACCESS_LOGS` or `ALB_CONNECTION_LOGS`. Required when `alb_load_balancers` is set. One instance delivers one log type. A change replaces every delivery source and delivery. |
 | `alb_load_balancers` | `map(string)` | `{}` | Application Load Balancers to deliver logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. |
 | `nlb_load_balancers` | `map(string)` | `{}` | Network Load Balancers to deliver access logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. Entries only for TLS listeners. |
+| `s3_buckets` | `map(string)` | `{}` | General purpose S3 buckets to deliver server access logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the bucket ARN. One log delivery per bucket. Unique bucket ARNs, not names and not object ARNs. An ARN change under the same key replaces that delivery source and delivery. AWS takes 15 to 20 minutes to apply the delivery. Delivery then begins within a few hours and includes new requests only. |
 | `subscription_filter_pattern` | `string` | `""` | Filter pattern. Empty sends all events. |
 | `backup_expiration_days` | `number` | `30` | Expiry for failed-delivery objects. |
 | `error_log_retention_days` | `number` | `7` | Retention of the error log group. |
@@ -427,6 +480,8 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `alb_log_delivery_ids` | Map of `alb_load_balancers` key to log delivery ID. Empty when no load balancers. |
 | `nlb_log_delivery_destination_arn` | Log delivery destination ARN, `null` when no load balancers. |
 | `nlb_log_delivery_ids` | Map of `nlb_load_balancers` key to log delivery ID. Empty when no load balancers. |
+| `s3_log_delivery_destination_arn` | Log delivery destination ARN, `null` when no buckets. |
+| `s3_log_delivery_ids` | Map of `s3_buckets` key to log delivery ID. Empty when no buckets. |
 
 ### License
 

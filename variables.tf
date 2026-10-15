@@ -1,6 +1,6 @@
 variable "fencer_endpoint_url" {
   type        = string
-  description = "The Fencer Firehose HTTP endpoint URL. Copy it from the AWS Monitor page in the Fencer app."
+  description = "The Fencer Firehose HTTP endpoint URL. Copy it from the AWS Monitor page in the Fencer app. It ends in /firehose and is the same for every data source: the access token identifies the data source."
 
   validation {
     condition     = startswith(var.fencer_endpoint_url, "https://")
@@ -175,5 +175,21 @@ variable "nlb_load_balancers" {
   validation {
     condition     = alltrue([for arn in values(var.nlb_load_balancers) : can(regex("^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:loadbalancer/net/[^/]+/[0-9a-f]+$", arn))]) && length(values(var.nlb_load_balancers)) == length(distinct(values(var.nlb_load_balancers)))
     error_message = "nlb_load_balancers values must be unique Network Load Balancer ARNs (arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/net/<name>/<id>)."
+  }
+}
+
+variable "s3_buckets" {
+  type        = map(string)
+  description = "General purpose S3 buckets whose server access logs (log type S3_SERVER_ACCESS_LOGS) the module delivers to the Firehose stream as JSON, as a map of a key of your choice to the bucket ARN. The key names the delivery source (<name_prefix>-<key>) and is the Terraform instance key, so a bucket created in the same apply works. The module creates one CloudWatch log delivery per bucket. The buckets must be in the same account and region as the stream. AWS takes 15 to 20 minutes to apply the delivery. Delivery then begins within a few hours and includes new requests only. Leave empty to create no log delivery."
+  default     = {}
+
+  validation {
+    condition     = alltrue([for key in keys(var.s3_buckets) : can(regex("^[a-z0-9][a-z0-9-]*$", key))])
+    error_message = "s3_buckets keys must start with a lowercase letter or digit and match ^[a-z0-9][a-z0-9-]*$; the key names the delivery source."
+  }
+
+  validation {
+    condition     = alltrue([for arn in values(var.s3_buckets) : can(regex("^arn:aws[a-z-]*:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", arn))]) && length(values(var.s3_buckets)) == length(distinct(values(var.s3_buckets)))
+    error_message = "s3_buckets values must be unique S3 bucket ARNs (arn:aws:s3:::<bucket-name>), not bucket names and not object ARNs."
   }
 }

@@ -94,12 +94,13 @@ resource "aws_iam_role_policy" "firehose" {
 locals {
   alb_logs_enabled = length(var.alb_load_balancers) > 0 && var.alb_log_type != null
   nlb_logs_enabled = length(var.nlb_load_balancers) > 0
+  s3_logs_enabled  = length(var.s3_buckets) > 0
   # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
   # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log or a log delivery, and
   # Terraform removes a tag that is not in the configuration on the next apply. Keep it while the
-  # module creates flow logs or ALB or NLB log deliveries, so a stream that only CloudTrail uses
+  # module creates flow logs or ALB, NLB or S3 log deliveries, so a stream that only CloudTrail uses
   # does not get it.
-  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled || local.nlb_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
+  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled || local.nlb_logs_enabled || local.s3_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
 }
 
 resource "aws_kinesis_firehose_delivery_stream" "fencer" {
@@ -149,8 +150,8 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
     # One instance sends data to one Fencer data source of one type. Records of a second type in
     # the same stream fail the transformation of the first.
     precondition {
-      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) + (length(var.nlb_load_balancers) > 0 ? 1 : 0) <= 1
-      error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs, alb_load_balancers and nlb_load_balancers. One module instance sends data to one Fencer data source."
+      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) + (length(var.nlb_load_balancers) > 0 ? 1 : 0) + (length(var.s3_buckets) > 0 ? 1 : 0) <= 1
+      error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs, alb_load_balancers, nlb_load_balancers and s3_buckets. One module instance sends data to one Fencer data source."
     }
   }
 }
@@ -323,5 +324,47 @@ resource "aws_cloudwatch_log_delivery" "nlb" {
   # source while a delivery uses it. Replace the delivery first. The log type never changes.
   lifecycle {
     replace_triggered_by = [aws_cloudwatch_log_delivery_source.nlb[each.key].resource_arn]
+  }
+}
+
+resource "aws_cloudwatch_log_delivery_destination" "s3" {
+  count         = local.s3_logs_enabled ? 1 : 0
+  name          = var.name_prefix
+  output_format = "json"
+  tags          = var.tags
+
+  delivery_destination_configuration {
+    destination_resource_arn = aws_kinesis_firehose_delivery_stream.fencer.arn
+  }
+}
+
+resource "aws_cloudwatch_log_delivery_source" "s3" {
+  for_each     = var.s3_buckets
+  name         = "${var.name_prefix}-${each.key}"
+  log_type     = "S3_SERVER_ACCESS_LOGS"
+  resource_arn = each.value
+  tags         = var.tags
+
+  # See the ALB delivery source.
+  depends_on = [aws_kinesis_firehose_delivery_stream.fencer]
+
+  lifecycle {
+    precondition {
+      condition     = length("${var.name_prefix}-${each.key}") <= 60
+      error_message = "The delivery source name <name_prefix>-<key> must be at most 60 characters. Use a shorter name_prefix or a shorter s3_buckets key."
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_delivery" "s3" {
+  for_each                 = aws_cloudwatch_log_delivery_source.s3
+  delivery_source_name     = each.value.name
+  delivery_destination_arn = aws_cloudwatch_log_delivery_destination.s3[0].arn
+  tags                     = var.tags
+
+  # A bucket ARN change replaces the delivery source, and AWS does not delete a delivery
+  # source while a delivery uses it. Replace the delivery first. The log type never changes.
+  lifecycle {
+    replace_triggered_by = [aws_cloudwatch_log_delivery_source.s3[each.key].resource_arn]
   }
 }

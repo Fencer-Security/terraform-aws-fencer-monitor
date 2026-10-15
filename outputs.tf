@@ -52,3 +52,13 @@ output "nlb_log_delivery_ids" {
   description = "Map of nlb_load_balancers key to CloudWatch log delivery ID. Empty when nlb_load_balancers is empty."
   value       = { for k, v in aws_cloudwatch_log_delivery.nlb : k => v.id }
 }
+
+output "s3_log_delivery_destination_arn" {
+  description = "ARN of the CloudWatch log delivery destination that points at the stream. Null when s3_buckets is empty."
+  value       = one(aws_cloudwatch_log_delivery_destination.s3[*].arn)
+}
+
+output "s3_log_delivery_ids" {
+  description = "Map of s3_buckets key to CloudWatch log delivery ID. Empty when s3_buckets is empty."
+  value       = { for k, v in aws_cloudwatch_log_delivery.s3 : k => v.id }
+}
