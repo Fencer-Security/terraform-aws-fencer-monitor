@@ -409,8 +409,10 @@ Subscription filters cannot cross accounts.
    `shared_preload_libraries = pgaudit`, a static parameter that takes effect
    after a reboot. Set `pgaudit.log`, for example `pgaudit.log = 'ddl, role'`,
    and run `CREATE EXTENSION pgaudit` in the database. Without both, pgAudit
-   logs nothing. Statement text can contain passwords and other secrets, so
-   check what your statements hold before you enable statement logging.
+   logs nothing. `log_statement` writes statement text verbatim, passwords
+   included (`CREATE ROLE ... PASSWORD`). Current pgAudit versions redact the
+   password in `CREATE ROLE` and `ALTER ROLE`, so prefer pgAudit, and check
+   what your statements hold before you enable `log_statement`.
 
 Only new log lines reach Fencer. RDS does not upload log lines it wrote before
 you enabled the export, and a subscription filter does not send older events.

@@ -39,9 +39,10 @@ Set these parameters in the instance's parameter group, so that the log holds
 useful lines:
 
 - `log_connections` and `log_disconnections` write the connection events.
-- `log_statement = ddl` writes schema changes. Statement text can contain
-  passwords and other secrets. Check what the statements can hold before you
-  enable it. The `pgaudit` extension is the alternative for statement logging.
+- `log_statement = ddl` writes schema changes verbatim, passwords included
+  (`CREATE ROLE ... PASSWORD`). Check what the statements can hold before you
+  enable it. The `pgaudit` extension is the alternative for statement logging,
+  and current versions redact the password in `CREATE ROLE` and `ALTER ROLE`.
   It needs `shared_preload_libraries = pgaudit`, a static parameter that takes
   effect after a reboot. Also set `pgaudit.log`, for example
   `pgaudit.log = 'ddl, role'`, and run `CREATE EXTENSION pgaudit` in the
