@@ -61,3 +61,23 @@ run "one_filter_per_log_group" {
     error_message = "The filter name must use name_prefix."
   }
 }
+
+run "accepts_an_rds_log_group_name" {
+  command = plan
+
+  variables {
+    cloudwatch_log_groups = {
+      postgresql = "/aws/rds/instance/my-db/postgresql"
+    }
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_subscription_filter.fencer["postgresql"].log_group_name == "/aws/rds/instance/my-db/postgresql"
+    error_message = "A log group name with slashes must pass through unchanged."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_subscription_filter.fencer["postgresql"].name == "fencer-siem"
+    error_message = "The filter name must use name_prefix."
+  }
+}
