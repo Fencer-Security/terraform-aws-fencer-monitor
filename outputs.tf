@@ -62,3 +62,18 @@ output "s3_log_delivery_ids" {
   description = "Map of s3_buckets key to CloudWatch log delivery ID. Empty when s3_buckets is empty."
   value       = { for k, v in aws_cloudwatch_log_delivery.s3 : k => v.id }
 }
+
+output "route53_resolver_query_log_config_id" {
+  description = "ID of the Route 53 Resolver query logging configuration. Null when route53_resolver_vpcs and route53_resolver_profiles are empty."
+  value       = one(aws_route53_resolver_query_log_config.fencer[*].id)
+}
+
+output "route53_resolver_query_log_config_association_ids" {
+  description = "Map of route53_resolver_vpcs key to query logging association ID. Empty when route53_resolver_vpcs is empty."
+  value       = { for key, id in var.route53_resolver_vpcs : key => aws_route53_resolver_query_log_config_association.fencer[id].id }
+}
+
+output "route53_resolver_profile_association_ids" {
+  description = "Map of route53_resolver_profiles key to Profile association ID. Empty when route53_resolver_profiles is empty."
+  value       = { for key, id in var.route53_resolver_profiles : key => aws_route53profiles_resource_association.fencer[id].id }
+}

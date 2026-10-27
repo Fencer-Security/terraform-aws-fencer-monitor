@@ -95,12 +95,14 @@ locals {
   alb_logs_enabled = length(var.alb_load_balancers) > 0 && var.alb_log_type != null
   nlb_logs_enabled = length(var.nlb_load_balancers) > 0
   s3_logs_enabled  = length(var.s3_buckets) > 0
+  # VPCs and Profiles share one query logging configuration.
+  route53_resolver_enabled = length(var.route53_resolver_vpcs) > 0 || length(var.route53_resolver_profiles) > 0
   # The AWSServiceRoleForLogDelivery role can write only to a stream with the tag
   # LogDeliveryEnabled=true. AWS adds the tag when it creates a flow log or a log delivery, and
   # Terraform removes a tag that is not in the configuration on the next apply. Keep it while the
-  # module creates flow logs or ALB, NLB or S3 log deliveries, so a stream that only CloudTrail uses
-  # does not get it.
-  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled || local.nlb_logs_enabled || local.s3_logs_enabled ? { LogDeliveryEnabled = "true" } : {})
+  # module creates flow logs, ALB, NLB or S3 log deliveries, or a Resolver query logging
+  # configuration, so a stream that only CloudTrail uses does not get it.
+  stream_tags = merge(var.tags, length(var.vpc_flow_logs) > 0 || local.alb_logs_enabled || local.nlb_logs_enabled || local.s3_logs_enabled || local.route53_resolver_enabled ? { LogDeliveryEnabled = "true" } : {})
 }
 
 resource "aws_kinesis_firehose_delivery_stream" "fencer" {
@@ -150,8 +152,8 @@ resource "aws_kinesis_firehose_delivery_stream" "fencer" {
     # One instance sends data to one Fencer data source of one type. Records of a second type in
     # the same stream fail the transformation of the first.
     precondition {
-      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) + (length(var.nlb_load_balancers) > 0 ? 1 : 0) + (length(var.s3_buckets) > 0 ? 1 : 0) <= 1
-      error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs, alb_load_balancers, nlb_load_balancers and s3_buckets. One module instance sends data to one Fencer data source."
+      condition     = (length(var.cloudwatch_log_groups) > 0 ? 1 : 0) + (length(var.vpc_flow_logs) > 0 ? 1 : 0) + (length(var.alb_load_balancers) > 0 ? 1 : 0) + (length(var.nlb_load_balancers) > 0 ? 1 : 0) + (length(var.s3_buckets) > 0 ? 1 : 0) + (local.route53_resolver_enabled ? 1 : 0) <= 1
+      error_message = "Set only one of cloudwatch_log_groups, vpc_flow_logs, alb_load_balancers, nlb_load_balancers, s3_buckets, and route53_resolver_vpcs or route53_resolver_profiles. The two Resolver inputs can be set together. One module instance sends data to one Fencer data source."
     }
   }
 }
@@ -366,5 +368,50 @@ resource "aws_cloudwatch_log_delivery" "s3" {
   # source while a delivery uses it. Replace the delivery first. The log type never changes.
   lifecycle {
     replace_triggered_by = [aws_cloudwatch_log_delivery_source.s3[each.key].resource_arn]
+  }
+}
+
+# Two service-linked roles take part. The first association in an account makes AWS create
+# AWSServiceRoleForRoute53Resolver, which sets up the log delivery, and that apply can fail once.
+# Apply again. The delivery itself runs through AWSServiceRoleForLogDelivery, the CloudWatch vended
+# logs role, which writes only to a stream with the tag LogDeliveryEnabled=true.
+resource "aws_route53_resolver_query_log_config" "fencer" {
+  count           = local.route53_resolver_enabled ? 1 : 0
+  name            = var.name_prefix
+  destination_arn = aws_kinesis_firehose_delivery_stream.fencer.arn
+  tags            = var.tags
+
+  lifecycle {
+    # The Resolver API rejects a name of digits only: (?!^[0-9]+$)([a-zA-Z0-9\-_' ']+).
+    precondition {
+      condition     = !can(regex("^[0-9]+$", var.name_prefix))
+      error_message = "name_prefix must contain a letter or a hyphen: the Route 53 Resolver query logging configuration takes its name from name_prefix, and AWS rejects a name of digits only."
+    }
+  }
+}
+
+# The instances are keyed by the AWS ID, not by the map key. Two instances of one resource have no
+# dependency on each other, so Terraform destroys one and creates the other in parallel; keyed by
+# the map key, a key rename would create the new association while AWS still deletes the old one
+# for the same VPC or Profile, and AWS refuses it (ConflictException, seen live 2026-10-26). Keyed
+# by the ID, a key rename changes nothing on a VPC association and replaces a Profile association
+# in place, one instance at a time.
+resource "aws_route53_resolver_query_log_config_association" "fencer" {
+  for_each                     = toset(values(var.route53_resolver_vpcs))
+  resolver_query_log_config_id = aws_route53_resolver_query_log_config.fencer[0].id
+  resource_id                  = each.value
+}
+
+resource "aws_route53profiles_resource_association" "fencer" {
+  for_each     = { for key, id in var.route53_resolver_profiles : id => key }
+  name         = "${var.name_prefix}-${each.value}"
+  profile_id   = each.key
+  resource_arn = aws_route53_resolver_query_log_config.fencer[0].arn
+
+  lifecycle {
+    precondition {
+      condition     = length("${var.name_prefix}-${each.value}") <= 64
+      error_message = "The association name <name_prefix>-<key> must be at most 64 characters. Use a shorter name_prefix or a shorter route53_resolver_profiles key."
+    }
   }
 }

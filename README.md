@@ -428,6 +428,96 @@ adjustable). If the log group already feeds other destinations, check
 
 See [`examples/rds-postgresql-logs`](./examples/rds-postgresql-logs).
 
+### Connect Route 53 Resolver query logs
+
+Deploy the module in the same AWS account and region as the VPCs. A Resolver
+query logging configuration delivers straight to the Firehose stream, so it
+needs no IAM role and no log group. Pass the VPCs as a map of a key of your
+choice to the VPC ID:
+
+```hcl
+module "fencer_route53_resolver_logs" {
+  source  = "Fencer-Security/fencer-monitor/aws"
+  version = "~> 1.6"
+
+  fencer_endpoint_url = var.fencer_endpoint_url # from the Fencer app, ends in /firehose
+  fencer_access_key   = var.fencer_route53_resolver_logs_access_key
+  name_prefix         = "fencer-route53-resolver"
+
+  route53_resolver_vpcs = { main = "vpc-0123456789abcdef0" }
+}
+```
+
+The module creates one query logging configuration, named `name_prefix`, with
+the stream as its destination, and one association per VPC. One module instance
+sends data to one Fencer data source, of type AWS Route53 DNS Query Logs. The
+module refuses VPCs and any other source input together.
+
+A query logging configuration logs only the VPCs of its own region and
+delivers only to a stream in that region. Resolver logs only queries that it
+cannot answer from its cache. A VPC can have one query logging configuration per
+destination type, so a VPC that already logs to a Firehose stream cannot log to
+this stream as well. AWS allows 20 configurations and 100 VPC associations per
+region.
+
+The delivery writes only to a stream with the tag `LogDeliveryEnabled = true`.
+The module adds that tag to the stream when `route53_resolver_vpcs` or
+`route53_resolver_profiles` is set, so Terraform never removes it.
+
+The principal that runs Terraform needs these IAM permissions:
+`route53resolver:CreateResolverQueryLogConfig`,
+`route53resolver:DeleteResolverQueryLogConfig`,
+`route53resolver:AssociateResolverQueryLogConfig`,
+`route53resolver:DisassociateResolverQueryLogConfig`,
+`route53resolver:GetResolverQueryLogConfig`,
+`route53resolver:GetResolverQueryLogConfigAssociation`,
+`route53resolver:ListResolverQueryLogConfigs`,
+`route53resolver:ListResolverQueryLogConfigAssociations`,
+`route53resolver:TagResource`, `route53resolver:UntagResource`,
+`route53resolver:ListTagsForResource`,
+`logs:CreateLogDelivery`, `logs:DeleteLogDelivery`,
+`firehose:TagDeliveryStream`, and `iam:CreateServiceLinkedRole`.
+
+Two service-linked roles take part. The first association in an AWS account
+makes AWS create `AWSServiceRoleForRoute53Resolver`, which sets up the log
+delivery. That first `terraform apply` can fail. Run `terraform apply` again; the
+role exists from then on. The delivery itself runs through
+`AWSServiceRoleForLogDelivery`, which writes only to a stream with the tag
+`LogDeliveryEnabled = true`. The module manages neither role: they belong to the
+account, not to one instance.
+
+The configuration takes its name from `name_prefix`. AWS rejects a name of
+digits only, so `name_prefix` must contain a letter or a hyphen.
+
+AWS delivers the first records within a few minutes after the association is
+active.
+
+A `name_prefix` change replaces the query logging configuration and every
+association. Resolver logging stops for the gap, the same way a flow log is
+replaced.
+
+#### Use a Route 53 Profile
+
+To log many VPCs, or VPCs that a Profile shares with other accounts, attach the
+configuration to a Route 53 Profile. Pass the Profiles as a map of a key of your
+choice to the Profile ID. The key names the association (`<name_prefix>-<key>`):
+
+```hcl
+  route53_resolver_profiles = { main = "rp-0123456789abcdef" }
+```
+
+Every VPC that is associated with the Profile is logged. Its records carry the
+Profile ID (`resource_id`) instead of the VPC ID (`vpc_id`). A Profile holds at
+most two query logging configurations. `route53_resolver_vpcs` and
+`route53_resolver_profiles` can be set together: both use the same
+configuration. For a Profile the principal also needs
+`route53profiles:AssociateResourceToProfile`,
+`route53profiles:DisassociateResourceFromProfile`, and
+`route53profiles:GetProfileResourceAssociation`.
+
+See [`examples/route53-resolver-logs`](./examples/route53-resolver-logs) and
+[`examples/route53-resolver-logs-profile`](./examples/route53-resolver-logs-profile).
+
 ### Breaking changes in 1.3
 
 `cloudwatch_log_group_names` and `vpc_flow_log_vpc_ids` are gone. Pass
@@ -462,6 +552,10 @@ keyed by the map key.
   `alb_load_balancers`, with the log type `NLB_ACCESS_LOGS`.
 - When `s3_buckets` is set: the same set of resources as for
   `alb_load_balancers`, with the log type `S3_SERVER_ACCESS_LOGS`.
+- When `route53_resolver_vpcs` or `route53_resolver_profiles` is set: one Route 53
+  Resolver query logging configuration that delivers to the Firehose stream, one
+  association per VPC, one association per Profile, and the
+  `LogDeliveryEnabled = true` tag on the stream.
 
 ### Other data source types
 
@@ -472,11 +566,11 @@ The AWS delivery mechanism decides the setup:
 | CloudTrail | This module. Pass the trail's log group. |
 | VPC flow logs | This module. Pass the VPCs. |
 | RDS PostgreSQL logs | This module. Pass the instance's log group. |
-| Route 53 resolver query logs | Not supported yet. |
 | ALB access logs, ALB connection logs | This module. Pass the log type and the load balancers. One instance per log type. |
 | ALB health check logs | Not supported. Fencer has no data source type for them. |
 | NLB access logs | This module. Pass the load balancer ARNs. |
 | S3 access logs | This module. Pass the bucket ARNs. |
+| Route 53 Resolver query logs | This module. Pass the VPCs or the Profiles. |
 
 ### Examples
 
@@ -494,6 +588,8 @@ apply, verify, clean up):
 | [`examples/nlb-access-logs`](./examples/nlb-access-logs) | NLB access logs through a CloudWatch log delivery to the stream. |
 | [`examples/s3-access-logs`](./examples/s3-access-logs) | S3 server access logs through a CloudWatch log delivery to the stream. |
 | [`examples/rds-postgresql-logs`](./examples/rds-postgresql-logs) | RDS PostgreSQL logs that an instance publishes to CloudWatch Logs. |
+| [`examples/route53-resolver-logs`](./examples/route53-resolver-logs) | Route 53 Resolver query logs of VPCs that deliver straight to the stream. |
+| [`examples/route53-resolver-logs-profile`](./examples/route53-resolver-logs-profile) | Route 53 Resolver query logs of a Route 53 Profile that deliver straight to the stream. |
 
 ### Verify
 
@@ -535,6 +631,8 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `alb_load_balancers` | `map(string)` | `{}` | Application Load Balancers to deliver logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. |
 | `nlb_load_balancers` | `map(string)` | `{}` | Network Load Balancers to deliver access logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the load balancer ARN. One log delivery per load balancer. Unique ARNs. An ARN change under the same key replaces that delivery source and delivery. Entries only for TLS listeners. |
 | `s3_buckets` | `map(string)` | `{}` | General purpose S3 buckets to deliver server access logs from: a key of your choice (`^[a-z0-9][a-z0-9-]*$`, it names the delivery source `<name_prefix>-<key>`) to the bucket ARN. One log delivery per bucket. Unique bucket ARNs, not names and not object ARNs. An ARN change under the same key replaces that delivery source and delivery. AWS takes 15 to 20 minutes to apply the delivery. Delivery then begins within a few hours and includes new requests only. |
+| `route53_resolver_vpcs` | `map(string)` | `{}` | VPCs whose Route 53 Resolver queries to log: a key of your choice to the VPC ID. One association per VPC. Unique, non-empty IDs. Same account and region as the stream. A VPC can have one query logging configuration per destination type. A VPC ID change under the same key replaces that association. A key change changes nothing in AWS. |
+| `route53_resolver_profiles` | `map(string)` | `{}` | Route 53 Profiles to attach the query logging configuration to: a key of your choice (it names the association `<name_prefix>-<key>`) to the Profile ID. One association per Profile. Unique, non-empty IDs. The key matches `^[a-z0-9][a-z0-9-]*$`, and `<name_prefix>-<key>` has at most 64 characters. A Profile holds at most two query logging configurations. Records carry the Profile ID instead of the VPC ID. A Profile ID change under the same key replaces that association. A key change renames the association: AWS removes the old one before it creates the new one. |
 | `subscription_filter_pattern` | `string` | `""` | Filter pattern. Empty sends all events. |
 | `backup_expiration_days` | `number` | `30` | Expiry for failed-delivery objects. |
 | `error_log_retention_days` | `number` | `7` | Retention of the error log group. |
@@ -557,6 +655,9 @@ const monitor = new fencermonitor.Module("fencer-monitor", {
 | `nlb_log_delivery_ids` | Map of `nlb_load_balancers` key to log delivery ID. Empty when no load balancers. |
 | `s3_log_delivery_destination_arn` | Log delivery destination ARN, `null` when no buckets. |
 | `s3_log_delivery_ids` | Map of `s3_buckets` key to log delivery ID. Empty when no buckets. |
+| `route53_resolver_query_log_config_id` | Query logging configuration ID, `null` when no VPCs and no Profiles. |
+| `route53_resolver_query_log_config_association_ids` | Map of `route53_resolver_vpcs` key to association ID. Empty when no VPCs. |
+| `route53_resolver_profile_association_ids` | Map of `route53_resolver_profiles` key to Profile association ID. Empty when no Profiles. |
 
 ### License
 

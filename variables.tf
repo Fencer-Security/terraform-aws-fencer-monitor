@@ -193,3 +193,30 @@ variable "s3_buckets" {
     error_message = "s3_buckets values must be unique S3 bucket ARNs (arn:aws:s3:::<bucket-name>), not bucket names and not object ARNs."
   }
 }
+
+variable "route53_resolver_vpcs" {
+  type        = map(string)
+  description = "VPCs whose Route 53 Resolver queries the module logs to the Firehose stream, as a map of a key of your choice to the VPC ID. The key is the Terraform instance key. The module creates one query logging configuration per instance and one association per VPC. The VPCs must be in the same account and Region as the stream. A VPC can have one query logging configuration per destination type. Leave empty to create no VPC association."
+  default     = {}
+
+  validation {
+    condition     = alltrue([for id in values(var.route53_resolver_vpcs) : length(id) > 0]) && length(values(var.route53_resolver_vpcs)) == length(distinct(values(var.route53_resolver_vpcs)))
+    error_message = "route53_resolver_vpcs values must be non-empty and unique VPC IDs."
+  }
+}
+
+variable "route53_resolver_profiles" {
+  type        = map(string)
+  description = "Route 53 Profiles to attach the query logging configuration to, as a map of a key of your choice to the Profile ID. The key names the association (<name_prefix>-<key>). Every VPC associated with the Profile is logged; its records carry the Profile ID instead of the VPC ID. A Profile holds at most two query logging configurations. Leave empty to create no Profile association."
+  default     = {}
+
+  validation {
+    condition     = alltrue([for id in values(var.route53_resolver_profiles) : length(id) > 0]) && length(values(var.route53_resolver_profiles)) == length(distinct(values(var.route53_resolver_profiles)))
+    error_message = "route53_resolver_profiles values must be non-empty and unique Profile IDs."
+  }
+
+  validation {
+    condition     = alltrue([for key in keys(var.route53_resolver_profiles) : can(regex("^[a-z0-9][a-z0-9-]*$", key))])
+    error_message = "route53_resolver_profiles keys must start with a lowercase letter or digit and match ^[a-z0-9][a-z0-9-]*$; the key names the association."
+  }
+}
